@@ -124,6 +124,13 @@ export const config = {
   },
 
   graphApiKey: process.env.GRAPH_API_KEY || u.graphApiKey || "",
+
+  // CoinGecko realtime prices — https://docs.coingecko.com/reference/simple-price
+  prices: {
+    apiKey: process.env.COINGECKO_API_KEY || u.coingeckoApiKey || "",
+    pro: process.env.COINGECKO_PRO === "true" || u.coingeckoPro === true,
+    cacheTtlMs: Number(process.env.COINGECKO_CACHE_TTL_MS || u.coingeckoCacheTtlMs || 60_000),
+  },
 };
 
 function defaultRpc(id) {

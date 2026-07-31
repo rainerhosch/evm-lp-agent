@@ -2,6 +2,12 @@ import { ethers } from "ethers";
 import { config } from "../config.js";
 import { log } from "../logger.js";
 import erc20Abi from "../abis/erc20.json" with { type: "json" };
+import {
+  getNativeUsdPrice,
+  getTokenUsdPrices,
+  nativeToUsd,
+  roundUsd,
+} from "./coingecko.js";
 
 let _provider = null;
 let _wallet = null;
@@ -31,7 +37,7 @@ export function getAddress() {
 }
 
 /**
- * Native + optional ERC20 balances.
+ * Native + optional ERC20 balances, with CoinGecko USD estimates.
  */
 export async function getWalletBalances({ tokens = [] } = {}) {
   const chain = config.chain;
@@ -44,6 +50,7 @@ export async function getWalletBalances({ tokens = [] } = {}) {
       chain: chain.id,
       native: 0,
       native_symbol: chain.nativeSymbol,
+      native_price_usd: null,
       native_usd: null,
       tokens: [],
       error: e.message,
@@ -55,7 +62,23 @@ export async function getWalletBalances({ tokens = [] } = {}) {
     const balWei = await provider.getBalance(address);
     const native = Number(ethers.formatEther(balWei));
 
+    // Live native → USD via CoinGecko (ETH or BNB depending on chain)
+    let native_price_usd = null;
+    let native_usd = null;
+    let price_source = null;
+    try {
+      const px = await getNativeUsdPrice(chain);
+      native_price_usd = px.price_usd;
+      price_source = px.source;
+      if (native_price_usd != null) {
+        native_usd = roundUsd(native * native_price_usd);
+      }
+    } catch (e) {
+      log("wallet_warn", `native price: ${e.message}`);
+    }
+
     const tokenRows = [];
+    const mints = [];
     for (const mint of tokens) {
       try {
         const c = new ethers.Contract(mint, erc20Abi, provider);
@@ -64,16 +87,43 @@ export async function getWalletBalances({ tokens = [] } = {}) {
           c.decimals(),
           c.symbol(),
         ]);
+        const balance = Number(ethers.formatUnits(raw, decimals));
         tokenRows.push({
           mint,
           symbol,
-          balance: Number(ethers.formatUnits(raw, decimals)),
+          balance,
           decimals: Number(decimals),
+          price_usd: null,
+          usd: null,
         });
+        mints.push(String(mint).toLowerCase());
       } catch (err) {
         tokenRows.push({ mint, error: err.message });
       }
     }
+
+    // Optional ERC20 USD via CoinGecko token_price (when platform known)
+    if (mints.length) {
+      try {
+        const { prices } = await getTokenUsdPrices(mints, chain.coingeckoPlatform);
+        for (const row of tokenRows) {
+          if (!row.mint || row.error) continue;
+          const px = prices[String(row.mint).toLowerCase()];
+          if (px != null) {
+            row.price_usd = px;
+            row.usd = roundUsd(row.balance * px);
+          }
+        }
+      } catch (e) {
+        log("wallet_warn", `token prices: ${e.message}`);
+      }
+    }
+
+    const tokens_usd = tokenRows.reduce((s, t) => s + (t.usd || 0), 0);
+    const total_usd =
+      native_usd != null || tokens_usd > 0
+        ? roundUsd((native_usd || 0) + tokens_usd)
+        : null;
 
     return {
       wallet: address,
@@ -82,6 +132,10 @@ export async function getWalletBalances({ tokens = [] } = {}) {
       dex: config.dex.id,
       native,
       native_symbol: chain.nativeSymbol,
+      native_price_usd,
+      native_usd,
+      price_source,
+      total_usd,
       rpc: config.rpcUrl.replace(/\/\/.*@/, "//***@"),
       tokens: tokenRows,
       dry_run: process.env.DRY_RUN === "true" || config.dryRun,
@@ -93,8 +147,13 @@ export async function getWalletBalances({ tokens = [] } = {}) {
       chain: chain.id,
       native: 0,
       native_symbol: chain.nativeSymbol,
+      native_price_usd: null,
+      native_usd: null,
       tokens: [],
       error: error.message,
     };
   }
 }
+
+/** Re-export helpers for CLI / tools. */
+export { getNativeUsdPrice, nativeToUsd, getTokenUsdPrices };

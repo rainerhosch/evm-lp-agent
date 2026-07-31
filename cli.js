@@ -25,6 +25,7 @@ const { values: flags } = parseArgs({
     "dry-run": { type: "boolean" },
     silent: { type: "boolean" },
   },
+  // note: --amount used by deploy and price
   allowPositionals: true,
   strict: false,
 });
@@ -60,9 +61,11 @@ Commands:
   manage [--dry-run] [--silent]
   config [--chain ...]
   telegram-test             Send a test message (needs TELEGRAM_BOT_TOKEN + CHAT_ID)
+  price [--chain ...]       CoinGecko native USD price (ETH/BNB)
+  price --amount 0.015      Convert native amount → USD
 
 Env: EVM_PRIVATE_KEY, ETH_RPC_URL / BSC_RPC_URL / RH_RPC_URL, OPENROUTER_API_KEY, DRY_RUN, EVM_CHAIN
-     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, COINGECKO_API_KEY (optional)
 Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
 `);
     break;
@@ -171,6 +174,26 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
     }
     const r = await notifyTest();
     out({ ok: !!r, ...status, response: r });
+    break;
+  }
+
+  case "price": {
+    const { getNativeUsdPrice, nativeToUsd } = await import("./tools/coingecko.js");
+    const { config } = await import("./config.js");
+    const px = await getNativeUsdPrice(config.chain);
+    const amount = flags.amount != null ? Number(flags.amount) : null;
+    const conv =
+      amount != null && Number.isFinite(amount)
+        ? await nativeToUsd(amount, config.chain)
+        : null;
+    out({
+      chain: config.chain.id,
+      native_symbol: config.chain.nativeSymbol,
+      ...px,
+      ...(conv
+        ? { amount_native: conv.amount_native, amount_usd: conv.amount_usd }
+        : {}),
+    });
     break;
   }
 

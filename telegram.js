@@ -117,6 +117,8 @@ export async function notifyDeploy({
   pair,
   pool,
   amount_native,
+  amount_usd = null,
+  native_price_usd = null,
   native_symbol = "ETH",
   position_id,
   fee,
@@ -134,6 +136,12 @@ export async function notifyDeploy({
     tick_lower != null && tick_upper != null
       ? `ticks [${tick_lower}, ${tick_upper}]`
       : "range n/a";
+  const usdStr =
+    amount_usd != null
+      ? ` (~$${Number(amount_usd).toFixed(2)}` +
+        (native_price_usd != null ? ` @ $${Number(native_price_usd).toFixed(2)}` : "") +
+        `)`
+      : "";
   const txLine = tx
     ? explorer
       ? `Tx: <a href="${esc(explorer)}/tx/${esc(tx)}"><code>${esc(shortAddr(tx, 12))}</code></a>\n`
@@ -148,7 +156,7 @@ export async function notifyDeploy({
   const html =
     `${mode} <b>Deployed</b> ${esc(pair || "?")}\n` +
     `Chain: ${esc(chain || "?")} | DEX: ${esc(dex || "?")}\n` +
-    `Amount: <b>${esc(amount_native)}</b> ${esc(native_symbol)}\n` +
+    `Amount: <b>${esc(amount_native)}</b> ${esc(native_symbol)}${esc(usdStr)}\n` +
     `Fee tier: ${esc(feeStr)}\n` +
     `Range: ${esc(range)}\n` +
     poolLine +

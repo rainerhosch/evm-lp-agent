@@ -30,6 +30,8 @@ const SCREENER_TOOLS = new Set([
   "deploy_position",
   "get_config",
   "compute_deploy_amount",
+  "get_native_price",
+  "convert_native_usd",
 ]);
 
 const MANAGER_TOOLS = new Set([
@@ -38,6 +40,8 @@ const MANAGER_TOOLS = new Set([
   "close_position",
   "claim_fees",
   "get_config",
+  "get_native_price",
+  "convert_native_usd",
 ]);
 
 function filterTools(role) {

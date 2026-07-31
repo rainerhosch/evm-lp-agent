@@ -22,6 +22,9 @@ export const CHAINS = {
     geckoNetwork: "eth",
     dexscreener: "ethereum",
     defaultDex: "uniswap_v3",
+    // CoinGecko simple/price id + token_price platform
+    coingeckoId: "ethereum",
+    coingeckoPlatform: "ethereum",
   },
   base: {
     id: "base",
@@ -33,6 +36,8 @@ export const CHAINS = {
     geckoNetwork: "base",
     dexscreener: "base",
     defaultDex: "uniswap_v3",
+    coingeckoId: "ethereum",
+    coingeckoPlatform: "base",
   },
   arbitrum: {
     id: "arbitrum",
@@ -44,6 +49,8 @@ export const CHAINS = {
     geckoNetwork: "arbitrum",
     dexscreener: "arbitrum",
     defaultDex: "uniswap_v3",
+    coingeckoId: "ethereum",
+    coingeckoPlatform: "arbitrum-one",
   },
   bsc: {
     id: "bsc",
@@ -55,6 +62,8 @@ export const CHAINS = {
     geckoNetwork: "bsc",
     dexscreener: "bsc",
     defaultDex: "pancakeswap_v3",
+    coingeckoId: "binancecoin",
+    coingeckoPlatform: "binance-smart-chain",
   },
   /**
    * Robinhood Chain — Arbitrum-style L2, ETH gas, Uniswap V2/V3/V4 live.
@@ -72,6 +81,10 @@ export const CHAINS = {
     geckoNetwork: "robinhood",
     dexscreener: "robinhood",
     defaultDex: "uniswap_v3",
+    // Native gas is ETH → price via CoinGecko "ethereum"
+    coingeckoId: "ethereum",
+    // Platform token_price not available yet on CoinGecko
+    coingeckoPlatform: null,
     // Newer chain: lower TVL books are normal vs mainnet
     screeningDefaults: {
       minTvlUsd: 5_000,

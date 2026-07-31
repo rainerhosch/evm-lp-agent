@@ -5,6 +5,7 @@ import { deployPosition, getMyPositions, closePosition, claimFees } from "./univ
 import { log, logAction } from "../logger.js";
 import { checkExitRules } from "../risk.js";
 import { notifyDeploy, notifyClose } from "../telegram.js";
+import { getNativeUsdPrice, nativeToUsd, usdToNative } from "./coingecko.js";
 
 const PROTECTED = new Set(["deploy_position", "close_position", "claim_fees"]);
 
@@ -17,6 +18,7 @@ const toolMap = {
   deploy_position: deployPosition,
   close_position: closePosition,
   claim_fees: claimFees,
+  get_native_price: async () => getNativeUsdPrice(config.chain),
   get_config: async () => ({
     chain: config.chain,
     dex: { id: config.dex.id, name: config.dex.name },
@@ -27,7 +29,19 @@ const toolMap = {
   }),
   compute_deploy_amount: async ({ native_balance } = {}) => {
     const bal = native_balance ?? (await getWalletBalances()).native;
-    return { native_balance: bal, deploy_amount: computeDeployAmount(bal), symbol: config.chain.nativeSymbol };
+    const deploy_amount = computeDeployAmount(bal);
+    const usd = await nativeToUsd(deploy_amount, config.chain);
+    return {
+      native_balance: bal,
+      deploy_amount,
+      deploy_amount_usd: usd.amount_usd,
+      native_price_usd: usd.price_usd,
+      symbol: config.chain.nativeSymbol,
+    };
+  },
+  convert_native_usd: async ({ amount_native, amount_usd } = {}) => {
+    if (amount_usd != null) return usdToNative(amount_usd, config.chain);
+    return nativeToUsd(amount_native, config.chain);
   },
 };
 
@@ -80,10 +94,20 @@ export async function executeTool(name, args = {}) {
     // Telegram side-effects (same idea as Meridian executor)
     if (success) {
       if (name === "deploy_position") {
+        const amt = result.amount_native ?? args.amount_native;
+        let amount_usd = null;
+        let native_price_usd = null;
+        try {
+          const conv = await nativeToUsd(amt, config.chain);
+          amount_usd = conv.amount_usd;
+          native_price_usd = conv.price_usd;
+        } catch { /* ignore price miss */ }
         notifyDeploy({
           pair: result.pool_name || args.pool_name || args.pool_address,
           pool: result.pool || args.pool_address,
-          amount_native: result.amount_native ?? args.amount_native,
+          amount_native: amt,
+          amount_usd,
+          native_price_usd,
           native_symbol: config.chain.nativeSymbol,
           position_id: result.position_id,
           fee: result.fee ?? args.fee,

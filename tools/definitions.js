@@ -97,10 +97,32 @@ export const tools = [
     type: "function",
     function: {
       name: "compute_deploy_amount",
-      description: "Compute sized deploy from wallet native balance",
+      description: "Compute sized deploy from wallet native balance (includes USD via CoinGecko)",
       parameters: {
         type: "object",
         properties: { native_balance: { type: "number" } },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_native_price",
+      description: "Realtime native gas token USD price from CoinGecko (ETH or BNB for active chain)",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "convert_native_usd",
+      description: "Convert native↔USD using live CoinGecko price. Pass amount_native OR amount_usd.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount_native: { type: "number" },
+          amount_usd: { type: "number" },
+        },
       },
     },
   },
