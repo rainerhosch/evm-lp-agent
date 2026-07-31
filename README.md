@@ -129,6 +129,35 @@ Native asset = **ETH** on ethereum/base/arbitrum, **BNB** on bsc.
 
 ---
 
+## Telegram bot commands
+
+Requires `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. Started automatically with `node index.js`.
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Full command list |
+| `/balance --chain bsc` | Native + USD on one chain |
+| `/balance --chain all` | All chains |
+| `/status --chain all` | Snapshot |
+| `/positions` / `/show-position --chain robinhood` | Open LPs |
+| `/pool 1` | Position detail by index |
+| `/price --chain ethereum --amount 0.015` | CoinGecko USD |
+| `/candidates --chain base` | Top pools |
+| `/screen --chain robinhood` | AI screen + deploy |
+| `/manage --chain all` | Risk exits |
+| `/deploy --chain bsc --pool 0x… --amount 0.015` | Deploy LP |
+| `/close 1` or `/close --id dry-…` | Close |
+| `/closeall --chain robinhood` | Close all on chain |
+| `/chain bsc` | Switch default active chain |
+| `/markets` `/config` `/ping` | Meta |
+| `/pause` | Stop automated screen/manage cron |
+| `/resume` or `/restart` | Resume cron after pause / rate limit |
+| `/cron` | Show automation pause status |
+
+**Rate limits:** On OpenRouter `429` / `free-models-per-day`, cron **auto-pauses** (one Telegram alert). Use `/resume` when quota resets or after adding credits.
+
+Notifications (deploy/close/screen) still fire as before.
+
 ## Grok skills (`.grok/skills/`)
 
 Open this repo in Grok Build to auto-load skills (same pattern as Meridian):

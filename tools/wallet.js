@@ -8,11 +8,31 @@ import {
   nativeToUsd,
   roundUsd,
 } from "./coingecko.js";
+import { registerWalletResets } from "../chain-runtime.js";
 
 let _provider = null;
 let _wallet = null;
+let _resetsRegistered = false;
+
+export function resetProvider() {
+  _provider = null;
+}
+export function resetWallet() {
+  _wallet = null;
+}
+
+function ensureResetsRegistered() {
+  if (_resetsRegistered) return;
+  _resetsRegistered = true;
+  try {
+    registerWalletResets({ resetProvider, resetWallet });
+  } catch {
+    /* ignore if runtime not ready */
+  }
+}
 
 export function getProvider() {
+  ensureResetsRegistered();
   if (!_provider) {
     _provider = new ethers.JsonRpcProvider(config.rpcUrl, config.chain.chainId);
   }
@@ -20,6 +40,7 @@ export function getProvider() {
 }
 
 export function getWallet() {
+  ensureResetsRegistered();
   if (_wallet) return _wallet;
   const pk = config.privateKey?.trim();
   if (!pk) throw new Error("EVM_PRIVATE_KEY not set in .env");

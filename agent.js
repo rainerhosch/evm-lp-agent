@@ -21,6 +21,7 @@ import {
   logReasoningPreview,
   resolveModel,
 } from "./llm/openrouter.js";
+import { isRateLimitError } from "./cron-control.js";
 
 const SCREENER_TOOLS = new Set([
   "get_wallet_balance",
@@ -113,8 +114,18 @@ export async function agentLoop(goal, maxSteps, history = [], role = "GENERAL", 
         max_tokens: config.llm.maxTokens,
       });
     } catch (e) {
-      // Free router can 429 / 503 — one retry with plain openrouter/free
       log("error", `LLM error: ${e.message}`);
+      // Rate limit: stop immediately — do not retry (burns remaining quota / spam)
+      if (isRateLimitError(e)) {
+        return {
+          content: `LLM error: ${e.message}`,
+          userMessage: goal,
+          model: lastModelUsed,
+          rate_limited: true,
+          error: e.message,
+        };
+      }
+      // Other free-router failures — one fallback to openrouter/free if not already on it
       if (useModel !== OPENROUTER_FREE_MODEL && step < steps - 1) {
         log("agent", `Falling back to ${OPENROUTER_FREE_MODEL}`);
         try {
@@ -129,6 +140,15 @@ export async function agentLoop(goal, maxSteps, history = [], role = "GENERAL", 
           });
           lastModelUsed = OPENROUTER_FREE_MODEL;
         } catch (e2) {
+          if (isRateLimitError(e2)) {
+            return {
+              content: `LLM error: ${e2.message}`,
+              userMessage: goal,
+              model: lastModelUsed,
+              rate_limited: true,
+              error: e2.message,
+            };
+          }
           return { content: `LLM error: ${e2.message}`, userMessage: goal, model: lastModelUsed };
         }
       } else {

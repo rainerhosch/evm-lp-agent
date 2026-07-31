@@ -241,3 +241,168 @@ export async function notifyTest() {
       `chat_id: <code>${esc(chatId)}</code>`,
   );
 }
+
+// ─── Inbound auth + long-polling ─────────────────────────────────
+
+const ALLOWED_USER_IDS = new Set(
+  String(process.env.TELEGRAM_ALLOWED_USER_IDS || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean),
+);
+
+let _offset = 0;
+let _polling = false;
+let _warnedAuth = false;
+
+export function isAuthorizedIncomingMessage(msg) {
+  const incomingChatId = String(msg.chat?.id || "");
+  const senderUserId = msg.from?.id != null ? String(msg.from.id) : null;
+  const chatType = msg.chat?.type || "unknown";
+
+  if (!chatId) {
+    if (!_warnedAuth) {
+      log("telegram_warn", "Inbound ignored: TELEGRAM_CHAT_ID not set");
+      _warnedAuth = true;
+    }
+    return false;
+  }
+  if (incomingChatId !== String(chatId)) return false;
+
+  if (chatType !== "private" && ALLOWED_USER_IDS.size === 0) {
+    if (!_warnedAuth) {
+      log("telegram_warn", "Group messages need TELEGRAM_ALLOWED_USER_IDS");
+      _warnedAuth = true;
+    }
+    return false;
+  }
+  if (ALLOWED_USER_IDS.size > 0) {
+    if (!senderUserId || !ALLOWED_USER_IDS.has(senderUserId)) return false;
+  }
+  return true;
+}
+
+export async function answerCallbackQuery(callbackQueryId, text = "") {
+  if (!TOKEN || !callbackQueryId) return null;
+  try {
+    const res = await fetch(`${BASE}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        ...(text ? { text: String(text).slice(0, 200) } : {}),
+      }),
+    });
+    return res.ok ? res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+const BOT_COMMANDS = [
+  { command: "help", description: "Show all commands" },
+  { command: "status", description: "Wallet + positions [--chain all|name]" },
+  { command: "balance", description: "Native balance + USD [--chain all|name]" },
+  { command: "price", description: "Native USD price [--chain] [--amount]" },
+  { command: "positions", description: "Open LPs [--chain all|name]" },
+  { command: "show_position", description: "Alias of /positions" },
+  { command: "pool", description: "Position detail by index /pool 1" },
+  { command: "candidates", description: "Top pools [--chain name]" },
+  { command: "screen", description: "AI screen + deploy [--chain]" },
+  { command: "manage", description: "Risk exits [--chain all|name]" },
+  { command: "deploy", description: "Deploy --chain --pool [--amount]" },
+  { command: "close", description: "Close /close 1 or --id" },
+  { command: "closeall", description: "Close all [--chain]" },
+  { command: "chain", description: "Switch active chain" },
+  { command: "markets", description: "List chains/DEXes" },
+  { command: "config", description: "Runtime config" },
+  { command: "pause", description: "Stop automated cron cycles" },
+  { command: "resume", description: "Restart automated cron cycles" },
+  { command: "restart", description: "Alias of /resume" },
+  { command: "cron", description: "Show cron pause status" },
+  { command: "ping", description: "Health check" },
+];
+
+async function registerCommands() {
+  if (!BASE) return;
+  try {
+    await fetch(`${BASE}/setMyCommands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commands: BOT_COMMANDS }),
+    });
+    log("telegram", "Bot commands registered");
+  } catch (e) {
+    log("telegram_warn", `setMyCommands: ${e.message}`);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function poll(onMessage) {
+  while (_polling) {
+    try {
+      const res = await fetch(`${BASE}/getUpdates?offset=${_offset}&timeout=30`, {
+        signal: AbortSignal.timeout(35_000),
+      });
+      if (!res.ok) {
+        await sleep(5000);
+        continue;
+      }
+      const data = await res.json();
+      for (const update of data.result || []) {
+        _offset = update.update_id + 1;
+        const callback = update.callback_query;
+        if (callback?.data && callback?.message) {
+          const callbackMsg = {
+            chat: callback.message.chat,
+            from: callback.from,
+            text: callback.data,
+          };
+          if (!isAuthorizedIncomingMessage(callbackMsg)) continue;
+          await onMessage({
+            ...callbackMsg,
+            isCallback: true,
+            callbackQueryId: callback.id,
+            callbackData: callback.data,
+            messageId: callback.message.message_id,
+          });
+          continue;
+        }
+        const msg = update.message;
+        if (!msg?.text) continue;
+        if (!isAuthorizedIncomingMessage(msg)) continue;
+        await onMessage(msg);
+      }
+    } catch (e) {
+      if (!e.message?.includes("aborted")) {
+        log("telegram_error", `Poll error: ${e.message}`);
+      }
+      await sleep(5000);
+    }
+  }
+}
+
+export function startPolling(onMessage) {
+  if (!TOKEN) {
+    log("telegram_warn", "TELEGRAM_BOT_TOKEN not set — polling disabled");
+    return;
+  }
+  chatId = resolveChatId();
+  if (!chatId) {
+    log(
+      "telegram_warn",
+      "TELEGRAM_CHAT_ID not set — outbound + inbound disabled until configured",
+    );
+  }
+  _polling = true;
+  poll(onMessage);
+  registerCommands();
+  log("telegram", "Bot polling started (multi-chain commands)");
+}
+
+export function stopPolling() {
+  _polling = false;
+}

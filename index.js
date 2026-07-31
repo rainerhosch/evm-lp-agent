@@ -17,21 +17,63 @@ import {
   notifyManage,
   notifyClose,
   sendHTML,
+  startPolling,
+  stopPolling,
 } from "./telegram.js";
+import { handleTelegramCommand } from "./telegram-commands.js";
+import {
+  isCronPaused,
+  getCronStatus,
+  registerCronTasks,
+  pauseCron,
+  resumeCron,
+  pauseForRateLimit,
+  isRateLimitError,
+  clearPauseFlag,
+} from "./cron-control.js";
 
 let _screenBusy = false;
 let _manageBusy = false;
+let _cronStarted = false;
 
 function classifyScreenReport(content) {
   const t = String(content || "");
   if (/skip:/i.test(t)) return "skip";
+  if (/rate limit|429|free-models-per-day/i.test(t)) return "error";
   if (/fail|error/i.test(t) && !/deploy/i.test(t)) return "error";
   if (/no deploy|⛔/i.test(t)) return "no_deploy";
   if (/deployed|🚀|✅/i.test(t)) return "deployed";
   return "no_deploy";
 }
 
+async function handleRateLimitPause(detail) {
+  const { shouldNotify, reason, already } = pauseForRateLimit(detail);
+  if (shouldNotify && telegramEnabled()) {
+    await sendHTML(
+      `⛔ <b>Cron PAUSED</b> — LLM rate limit\n` +
+        `${escapeHtml(reason)}\n\n` +
+        `Automated screen/manage stopped to avoid further 429 spam.\n` +
+        `Manual Telegram commands still work.\n\n` +
+        `When ready: <code>/resume</code> or <code>/restart</code>`,
+    ).catch(() => {});
+  } else if (already) {
+    log("cron", `Still paused (rate limit) — skip cycle`);
+  }
+  return reason;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export async function runScreeningCycle({ silent = false } = {}) {
+  if (isCronPaused() && silent) {
+    // Cron-triggered while paused — no-op (belt and suspenders if task not stopped)
+    return `Skip: cron paused (${getCronStatus().reason || "paused"})`;
+  }
   if (_screenBusy) {
     log("cron", "Screening skipped — busy");
     return "busy";
@@ -42,7 +84,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
     const positions = await getMyPositions({ force: true });
     if (positions.total_positions >= config.risk.maxPositions) {
       const msg = `Skip: max positions (${positions.total_positions})`;
-      if (telegramEnabled()) {
+      if (telegramEnabled() && !silent) {
         await notifyScreen({
           chain: config.chain.id,
           dex: config.dex.id,
@@ -56,7 +98,7 @@ export async function runScreeningCycle({ silent = false } = {}) {
     const need = config.management.deployAmountNative + config.management.gasReserve;
     if (!isDryRun() && (bal.native || 0) < need) {
       const msg = `Skip: insufficient ${config.chain.nativeSymbol} (${bal.native} < ${need})`;
-      if (telegramEnabled()) {
+      if (telegramEnabled() && !silent) {
         await notifyScreen({
           chain: config.chain.id,
           dex: config.dex.id,
@@ -91,11 +133,17 @@ ${blocks || "none"}
 Pick best pool and call deploy_position with full pool_address, pool_name, amount_native=${deploy}.
 If no good candidate: reply NO DEPLOY with reasons.`;
 
-    const { content } = await agentLoop(goal, config.llm.maxSteps, [], "SCREENER");
+    const result = await agentLoop(goal, config.llm.maxSteps, [], "SCREENER");
+    const content = result?.content ?? result;
+
+    if (result?.rate_limited || isRateLimitError(content)) {
+      const reason = await handleRateLimitPause(result?.error || content);
+      return `Cron paused: ${reason}`;
+    }
+
     if (!silent) console.log(content);
 
     // Deploy success already notifies via executor.notifyDeploy.
-    // Still send cycle summary for NO DEPLOY / errors (not for pure deployed to avoid double spam).
     if (telegramEnabled()) {
       const status = classifyScreenReport(content);
       if (status !== "deployed") {
@@ -111,6 +159,10 @@ If no good candidate: reply NO DEPLOY with reasons.`;
     return content;
   } catch (e) {
     log("cron_error", e.message);
+    if (isRateLimitError(e)) {
+      const reason = await handleRateLimitPause(e.message);
+      return `Cron paused: ${reason}`;
+    }
     if (telegramEnabled()) {
       await notifyScreen({
         chain: config.chain.id,
@@ -127,13 +179,19 @@ If no good candidate: reply NO DEPLOY with reasons.`;
 }
 
 export async function runManagementCycle({ silent = false } = {}) {
+  if (isCronPaused() && silent) {
+    return `Skip: cron paused (${getCronStatus().reason || "paused"})`;
+  }
   if (_manageBusy) return "busy";
   _manageBusy = true;
   try {
     const snap = await getMyPositions({ force: true });
     if (!snap.positions?.length) {
-      log("cron", "No positions — optional screen");
-      runScreeningCycle({ silent: true }).catch(() => {});
+      // Don't auto-trigger screen while paused or while burning LLM quota
+      if (!isCronPaused()) {
+        log("cron", "No positions — optional screen");
+        runScreeningCycle({ silent: true }).catch(() => {});
+      }
       return "No open positions";
     }
 
@@ -150,7 +208,6 @@ export async function runManagementCycle({ silent = false } = {}) {
       if (rule?.action === "CLOSE") {
         const r = await closePosition({ position_id: p.position, reason: rule.reason });
         actions.push({ pair: p.pair, ...rule, result: r });
-        // Direct close path (not via executor) — notify here
         if (r?.success && telegramEnabled()) {
           await notifyClose({
             pair: p.pair,
@@ -186,14 +243,63 @@ export async function runManagementCycle({ silent = false } = {}) {
   }
 }
 
-function startCron() {
-  cron.schedule(`*/${Math.max(1, config.schedule.managementIntervalMin)} * * * *`, () => {
-    runManagementCycle({ silent: true }).catch((e) => log("cron_error", e.message));
-  });
-  cron.schedule(`*/${Math.max(1, config.schedule.screeningIntervalMin)} * * * *`, () => {
-    runScreeningCycle({ silent: true }).catch((e) => log("cron_error", e.message));
-  });
-  log("cron", `Started manage=${config.schedule.managementIntervalMin}m screen=${config.schedule.screeningIntervalMin}m`);
+export function startCronJobs() {
+  // Destroy previous scheduled tasks cleanly
+  const prev = getCronStatus();
+  if (prev.tasks > 0) {
+    pauseCron("restarting cron tasks");
+  }
+
+  const mgmt = cron.schedule(
+    `*/${Math.max(1, config.schedule.managementIntervalMin)} * * * *`,
+    () => {
+      if (isCronPaused()) return;
+      runManagementCycle({ silent: true }).catch((e) => log("cron_error", e.message));
+    },
+    { scheduled: true },
+  );
+
+  const screen = cron.schedule(
+    `*/${Math.max(1, config.schedule.screeningIntervalMin)} * * * *`,
+    () => {
+      if (isCronPaused()) return;
+      runScreeningCycle({ silent: true }).catch((e) => log("cron_error", e.message));
+    },
+    { scheduled: true },
+  );
+
+  registerCronTasks([mgmt, screen]);
+  clearPauseFlag();
+  _cronStarted = true;
+  log(
+    "cron",
+    `Started manage=${config.schedule.managementIntervalMin}m screen=${config.schedule.screeningIntervalMin}m`,
+  );
+  return { management: mgmt, screening: screen };
+}
+
+/** Public API for Telegram */
+export function pauseAutomatedCycles(reason = "telegram /pause") {
+  return pauseCron(reason);
+}
+
+export function resumeAutomatedCycles(reason = "telegram /resume") {
+  const st = getCronStatus();
+  if (!_cronStarted || st.tasks === 0) {
+    startCronJobs();
+    return { restarted: true, ...getCronStatus() };
+  }
+  const r = resumeCron(reason);
+  return { restarted: false, ...r, ...getCronStatus() };
+}
+
+export function getAutomationStatus() {
+  return {
+    ...getCronStatus(),
+    cron_started: _cronStarted,
+    screen_busy: _screenBusy,
+    manage_busy: _manageBusy,
+  };
 }
 
 const isMain = process.argv[1] && process.argv[1].includes("index.js");
@@ -202,14 +308,25 @@ if (isMain) {
   console.log(`Chain: ${config.chain.name} | DEX: ${config.dex.name} | DRY_RUN=${isDryRun()}`);
   console.log("Markets:", listSupportedMarkets().map((m) => `${m.chain}/${m.dex}`).join(", "));
   console.log(`Telegram: ${telegramEnabled() ? "enabled" : "disabled (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"}`);
+
+  startPolling(handleTelegramCommand);
+
   if (telegramEnabled()) {
     sendHTML(
       `🤖 <b>evm-lp-agent started</b>\n` +
         `Chain: ${config.chain.name}\n` +
         `DEX: ${config.dex.name}\n` +
-        `DRY_RUN: ${isDryRun()}`,
+        `DRY_RUN: ${isDryRun()}\n` +
+        `Commands: /help · /pause · /resume`,
     ).catch(() => {});
   }
-  startCron();
+
+  startCronJobs();
   runScreeningCycle({ silent: false }).catch((e) => log("startup_error", e.message));
+
+  process.on("SIGINT", () => {
+    stopPolling();
+    pauseCron("shutdown");
+    process.exit(0);
+  });
 }
