@@ -76,7 +76,10 @@ export const config = {
     minTvlUsd: u.minTvlUsd ?? chain.screeningDefaults?.minTvlUsd ?? 50_000,
     minVolume24hUsd: u.minVolume24hUsd ?? chain.screeningDefaults?.minVolume24hUsd ?? 20_000,
     minFeeAprPct: u.minFeeAprPct ?? chain.screeningDefaults?.minFeeAprPct ?? 5,
+    minTransactions24h: u.minTransactions24h ?? chain.screeningDefaults?.minTransactions24h ?? 10,
     maxTopPoolRank: u.maxTopPoolRank ?? 50,
+    // Strict safety block: if GMGN is enabled but returns no data (unsupported chain, error), block the pool
+    requireGmgnSafety: u.requireGmgnSafety ?? true,
     // Must match GeckoTerminal network id for THIS chain (never reuse eth for L2s)
     geckoNetwork: u.geckoNetwork || chain.geckoNetwork,
   },

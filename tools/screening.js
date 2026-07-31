@@ -132,6 +132,10 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         filteredOut.push({ name: p.name, reason: `fee APR ${p.fee_apr_pct}% < ${s.minFeeAprPct}%` });
         return false;
       }
+      if (p.transactions_24h < s.minTransactions24h) {
+        filteredOut.push({ name: p.name, reason: `24h txns ${p.transactions_24h} < ${s.minTransactions24h}` });
+        return false;
+      }
       return true;
     });
 
@@ -152,17 +156,21 @@ export async function getTopCandidates({ limit = 10 } = {}) {
   const screened = eligible.filter((p) => {
     if (p.gmgn) {
       if (p.gmgn.is_honeypot) {
-        filteredOut.push({ name: p.name, reason: "GMGN: Honeypot" });
+        filteredOut.push({ name: p.name, reason: "honeypot" });
         return false;
       }
       if (p.gmgn.is_blacklisted) {
-        filteredOut.push({ name: p.name, reason: "GMGN: Blacklisted" });
+        filteredOut.push({ name: p.name, reason: "blacklisted" });
         return false;
       }
-      if (p.gmgn.has_high_supply_concentration) {
-        filteredOut.push({ name: p.name, reason: "GMGN: High top-10 concentration" });
+      if (p.gmgn.top_10_holder_rate > s.maxTop10HolderRate) {
+        filteredOut.push({ name: p.name, reason: `concentration ${p.gmgn.top_10_holder_rate}% > max` });
         return false;
       }
+    } else if (hasGmgnApiKey() && s.requireGmgnSafety) {
+      // API key is present but GMGN returned no data (unsupported chain, error, etc)
+      filteredOut.push({ name: p.name, reason: "GMGN safety check unavailable/unsupported" });
+      return false;
     }
     return true;
   });
