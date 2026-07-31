@@ -92,29 +92,39 @@ export function applyDex(dexId) {
 }
 
 /**
- * Run async work on a chain, then restore previous chain.
+ * Run async work on a chain/dex, then restore previous chain/dex.
  */
-export async function withChain(chainName, fn) {
-  const prev = getActiveChainId();
-  if (chainName && chainName !== "all" && chainName !== prev) {
+export async function withChain(chainName, fn, targetDex = null) {
+  const prevChain = getActiveChainId();
+  const prevDex = config.dex?.id;
+  const needSwitchChain = chainName && chainName !== "all" && chainName !== prevChain;
+  
+  if (needSwitchChain) {
     applyChain(chainName);
   }
+  if (targetDex && targetDex !== config.dex?.id) {
+    applyDex(targetDex);
+  }
+
   try {
     return await fn({ chain: config.chain, dex: config.dex });
   } finally {
-    if (chainName && chainName !== "all" && chainName !== prev) {
-      try {
-        applyChain(prev);
-      } catch {
-        /* ignore restore errors */
+    try {
+      if (needSwitchChain) {
+        applyChain(prevChain);
       }
+      if (prevDex && config.dex?.id !== prevDex) {
+        applyDex(prevDex);
+      }
+    } catch {
+      /* ignore restore errors */
     }
   }
 }
 
 /**
- * Parse "--chain bsc" or "chain=bsc" or trailing token from telegram text.
- * Returns { chain: string|null|'all', rest: string, args: string[] }
+ * Parse "--chain bsc" or "chain=bsc" or "--dex uniswap_v4" from telegram text.
+ * Returns { chain: string|null|'all', dex: string|null, rest: string, args: string[] }
  */
 export function parseChainArgs(text) {
   const raw = String(text || "").trim();
@@ -122,20 +132,34 @@ export function parseChainArgs(text) {
   const cleaned = raw.replace(/@\w+/g, "").trim();
   const tokens = cleaned.split(/\s+/).filter(Boolean);
   let chain = null;
+  let dex = null;
   const rest = [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t === "--chain" || t === "-c" || t === "chain") {
       const next = tokens[i + 1];
-      if (next) {
+      if (next && !next.startsWith("-")) {
         chain = next.toLowerCase().replace(/^--/, "");
         i++;
         continue;
       }
     }
-    const m = t.match(/^--chain=(.+)$/i) || t.match(/^chain=(.+)$/i);
+    if (t === "--dex" || t === "-d" || t === "dex") {
+      const next = tokens[i + 1];
+      if (next && !next.startsWith("-")) {
+        dex = next.toLowerCase().replace(/^--/, "");
+        i++;
+        continue;
+      }
+    }
+    let m = t.match(/^--chain=(.+)$/i) || t.match(/^chain=(.+)$/i);
     if (m) {
       chain = m[1].toLowerCase();
+      continue;
+    }
+    m = t.match(/^--dex=(.+)$/i) || t.match(/^dex=(.+)$/i);
+    if (m) {
+      dex = m[1].toLowerCase();
       continue;
     }
     rest.push(t);
@@ -146,7 +170,7 @@ export function parseChainArgs(text) {
     rest.splice(1, 1);
   }
   if (chain === "all" || chain === "*") chain = "all";
-  return { chain, rest, command: (rest[0] || "").toLowerCase(), args: rest.slice(1) };
+  return { chain, dex, rest, command: (rest[0] || "").toLowerCase(), args: rest.slice(1) };
 }
 
 export function marketsHelp() {

@@ -185,21 +185,21 @@ async function cmdCandidates(chain, limit = 8) {
   return `🔍 <b>Candidates [${esc(chain)}]</b>\n${lines.join("\n\n") || "none"}`;
 }
 
-async function cmdScreen(chain) {
+async function cmdScreen(chain, dex) {
   const { runScreeningCycle } = await import("./index.js");
   return withChain(chain, async () => {
-    await reply(`🔍 Screening <b>${esc(config.chain.id)}</b>…`);
+    await reply(`🔍 Screening <b>${esc(config.chain.id)}</b> on <b>${esc(config.dex.name)}</b>…`);
     const report = await runScreeningCycle({ silent: true });
     return `🔍 <b>Screen done</b> [${esc(config.chain.id)}]\n${esc(String(report).slice(0, 3500))}`;
-  });
+  }, dex);
 }
 
-async function cmdManage(chain) {
+async function cmdManage(chain, dex) {
   const { runManagementCycle } = await import("./index.js");
   if (chain === "all") {
     const results = [];
     for (const id of listChainIds()) {
-      const r = await withChain(id, async () => runManagementCycle({ silent: true }));
+      const r = await withChain(id, async () => runManagementCycle({ silent: true }), dex);
       results.push(`[${id}] ${r}`);
     }
     return `📋 <b>Manage all</b>\n${esc(results.join("\n"))}`;
@@ -207,13 +207,13 @@ async function cmdManage(chain) {
   return withChain(chain, async () => {
     const r = await runManagementCycle({ silent: true });
     return `📋 <b>Manage</b> [${esc(chain)}]\n${esc(String(r))}`;
-  });
+  }, dex);
 }
 
-async function cmdDeploy(chain, pool, amount) {
+async function cmdDeploy(chain, dex, pool, amount) {
   if (!pool) throw new Error("Usage: /deploy --chain <name> --pool <0x...> [--amount n]");
   return withChain(chain, async () => {
-    await reply(`🚀 Deploying on <b>${esc(config.chain.id)}</b>…`);
+    await reply(`🚀 Deploying on <b>${esc(config.chain.id)}</b> via <b>${esc(config.dex.name)}</b>…`);
     const result = await executeTool("deploy_position", {
       pool_address: pool,
       pool_name: pool,
@@ -228,7 +228,7 @@ async function cmdDeploy(chain, pool, amount) {
       `Amount: ${esc(result.amount_native)} ${esc(config.chain.nativeSymbol)}\n` +
       `Position: <code>${esc(result.position_id)}</code>`
     );
-  });
+  }, dex);
 }
 
 async function cmdClose(chain, indexOrId) {
@@ -304,8 +304,9 @@ async function dispatch(rawText) {
   let cmd = (parsed.command || "").replace(/^\//, "").toLowerCase().split("@")[0];
   const args = parsed.args || [];
   const chain = resolveTargetChain(parsed);
+  const dex = parsed.dex;
 
-  log("telegram", `cmd=/${cmd} chain=${chain} args=${JSON.stringify(args)}`);
+  log("telegram", `cmd=/${cmd} chain=${chain} dex=${dex} args=${JSON.stringify(args)}`);
 
   switch (cmd) {
     case "help":
@@ -399,16 +400,16 @@ async function dispatch(rawText) {
       return;
 
     case "screen":
-      await reply(await cmdScreen(chain === "all" ? getActiveChainId() : chain));
+      await reply(await cmdScreen(chain === "all" ? getActiveChainId() : chain, dex));
       return;
 
     case "manage":
-      await reply(await cmdManage(chain));
+      await reply(await cmdManage(chain, dex));
       return;
 
     case "deploy": {
       const { pool, amount } = parseDeployFlags(args);
-      await reply(await cmdDeploy(chain === "all" ? getActiveChainId() : chain, pool, amount));
+      await reply(await cmdDeploy(chain === "all" ? getActiveChainId() : chain, dex, pool, amount));
       return;
     }
 
