@@ -59,8 +59,10 @@ Commands:
   screen [--dry-run] [--silent] [--chain ...]
   manage [--dry-run] [--silent]
   config [--chain ...]
+  telegram-test             Send a test message (needs TELEGRAM_BOT_TOKEN + CHAT_ID)
 
 Env: EVM_PRIVATE_KEY, ETH_RPC_URL / BSC_RPC_URL / RH_RPC_URL, OPENROUTER_API_KEY, DRY_RUN, EVM_CHAIN
+     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
 `);
     break;
@@ -99,11 +101,13 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
 
   case "deploy": {
     if (!flags.pool) die("Usage: deploy --pool <address> [--amount n]");
-    const { deployPosition } = await import("./tools/univ3.js");
+    // Route through executor so Telegram notifyDeploy fires
+    const { executeTool } = await import("./tools/executor.js");
     out(
-      await deployPosition({
+      await executeTool("deploy_position", {
         pool_address: flags.pool,
         amount_native: flags.amount ? Number(flags.amount) : undefined,
+        pool_name: flags.pool,
       }),
     );
     break;
@@ -111,8 +115,9 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
 
   case "close": {
     if (!flags.position) die("Usage: close --position <id>");
-    const { closePosition } = await import("./tools/univ3.js");
-    out(await closePosition({ position_id: flags.position, reason: flags.reason || "cli" }));
+    // Route through executor so Telegram notifyClose fires
+    const { executeTool } = await import("./tools/executor.js");
+    out(await executeTool("close_position", { position_id: flags.position, reason: flags.reason || "cli" }));
     break;
   }
 
@@ -133,6 +138,7 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
   case "config": {
     const { config, computeDeployAmount, isDryRun } = await import("./config.js");
     const { getWalletBalances } = await import("./tools/wallet.js");
+    const { getTelegramStatus } = await import("./telegram.js");
     const bal = await getWalletBalances().catch(() => ({ native: 0 }));
     out({
       dry_run: isDryRun(),
@@ -146,8 +152,25 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
         screening: config.llm.screeningModel,
         management: config.llm.managementModel,
       },
+      telegram: getTelegramStatus(),
       compute_deploy: computeDeployAmount(bal.native || 0),
     });
+    break;
+  }
+
+  case "telegram-test": {
+    const { notifyTest, getTelegramStatus } = await import("./telegram.js");
+    const status = getTelegramStatus();
+    if (!status.enabled) {
+      out({
+        ok: false,
+        ...status,
+        hint: "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env (or telegramChatId in user-config.json)",
+      });
+      break;
+    }
+    const r = await notifyTest();
+    out({ ok: !!r, ...status, response: r });
     break;
   }
 

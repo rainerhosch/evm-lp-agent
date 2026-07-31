@@ -4,6 +4,7 @@ import { getTopCandidates, getPoolDetail, discoverPools } from "./screening.js";
 import { deployPosition, getMyPositions, closePosition, claimFees } from "./univ3.js";
 import { log, logAction } from "../logger.js";
 import { checkExitRules } from "../risk.js";
+import { notifyDeploy, notifyClose } from "../telegram.js";
 
 const PROTECTED = new Set(["deploy_position", "close_position", "claim_fees"]);
 
@@ -73,7 +74,40 @@ export async function executeTool(name, args = {}) {
 
   try {
     const result = await fn(args);
-    logAction({ tool: name, args, success: result?.success !== false && !result?.error, duration_ms: Date.now() - start });
+    const success = result?.success !== false && !result?.error && !result?.blocked;
+    logAction({ tool: name, args, success, duration_ms: Date.now() - start });
+
+    // Telegram side-effects (same idea as Meridian executor)
+    if (success) {
+      if (name === "deploy_position") {
+        notifyDeploy({
+          pair: result.pool_name || args.pool_name || args.pool_address,
+          pool: result.pool || args.pool_address,
+          amount_native: result.amount_native ?? args.amount_native,
+          native_symbol: config.chain.nativeSymbol,
+          position_id: result.position_id,
+          fee: result.fee ?? args.fee,
+          tick_lower: result.tick_lower,
+          tick_upper: result.tick_upper,
+          chain: config.chain.name || config.chain.id,
+          dex: config.dex.name || config.dex.id,
+          dry_run: !!(result.dry_run || isDryRun()),
+          tx: result.tx || result.txs?.[0] || null,
+          explorer: config.chain.explorer || null,
+        }).catch((e) => log("telegram_warn", e.message));
+      } else if (name === "close_position") {
+        notifyClose({
+          pair: result.pair || args.position_id,
+          position_id: result.position_id || args.position_id,
+          reason: args.reason || result.reason || "",
+          pnl_pct: result.pnl_pct ?? null,
+          chain: config.chain.name || config.chain.id,
+          dry_run: !!(result.dry_run || isDryRun()),
+          tx: result.tx || null,
+        }).catch((e) => log("telegram_warn", e.message));
+      }
+    }
+
     return result;
   } catch (e) {
     logAction({ tool: name, args, success: false, error: e.message, duration_ms: Date.now() - start });

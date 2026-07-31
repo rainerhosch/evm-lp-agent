@@ -15,6 +15,8 @@ if (u.chain) process.env.EVM_CHAIN ||= u.chain;
 if (u.llmModel) process.env.LLM_MODEL ||= u.llmModel;
 if (u.llmBaseUrl) process.env.LLM_BASE_URL ||= u.llmBaseUrl;
 if (u.llmApiKey) process.env.LLM_API_KEY ||= u.llmApiKey;
+if (u.telegramChatId) process.env.TELEGRAM_CHAT_ID ||= String(u.telegramChatId);
+if (u.telegramBotToken) process.env.TELEGRAM_BOT_TOKEN ||= String(u.telegramBotToken);
 
 const chainName = process.env.EVM_CHAIN || u.chain || "ethereum";
 const chain = resolveChain(chainName);

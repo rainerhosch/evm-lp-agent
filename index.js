@@ -11,9 +11,25 @@ import { checkExitRules } from "./risk.js";
 import { getTrackedPosition, updatePeak } from "./state.js";
 import { log } from "./logger.js";
 import { listSupportedMarkets } from "./chains/registry.js";
+import {
+  isEnabled as telegramEnabled,
+  notifyScreen,
+  notifyManage,
+  notifyClose,
+  sendHTML,
+} from "./telegram.js";
 
 let _screenBusy = false;
 let _manageBusy = false;
+
+function classifyScreenReport(content) {
+  const t = String(content || "");
+  if (/skip:/i.test(t)) return "skip";
+  if (/fail|error/i.test(t) && !/deploy/i.test(t)) return "error";
+  if (/no deploy|⛔/i.test(t)) return "no_deploy";
+  if (/deployed|🚀|✅/i.test(t)) return "deployed";
+  return "no_deploy";
+}
 
 export async function runScreeningCycle({ silent = false } = {}) {
   if (_screenBusy) {
@@ -25,11 +41,31 @@ export async function runScreeningCycle({ silent = false } = {}) {
     const bal = await getWalletBalances();
     const positions = await getMyPositions({ force: true });
     if (positions.total_positions >= config.risk.maxPositions) {
-      return `Skip: max positions (${positions.total_positions})`;
+      const msg = `Skip: max positions (${positions.total_positions})`;
+      if (telegramEnabled()) {
+        await notifyScreen({
+          chain: config.chain.id,
+          dex: config.dex.id,
+          status: "skip",
+          summary: msg,
+          dry_run: isDryRun(),
+        }).catch(() => {});
+      }
+      return msg;
     }
     const need = config.management.deployAmountNative + config.management.gasReserve;
     if (!isDryRun() && (bal.native || 0) < need) {
-      return `Skip: insufficient ${config.chain.nativeSymbol} (${bal.native} < ${need})`;
+      const msg = `Skip: insufficient ${config.chain.nativeSymbol} (${bal.native} < ${need})`;
+      if (telegramEnabled()) {
+        await notifyScreen({
+          chain: config.chain.id,
+          dex: config.dex.id,
+          status: "skip",
+          summary: msg,
+          dry_run: isDryRun(),
+        }).catch(() => {});
+      }
+      return msg;
     }
 
     const deploy = computeDeployAmount(bal.native || 0);
@@ -57,9 +93,33 @@ If no good candidate: reply NO DEPLOY with reasons.`;
 
     const { content } = await agentLoop(goal, config.llm.maxSteps, [], "SCREENER");
     if (!silent) console.log(content);
+
+    // Deploy success already notifies via executor.notifyDeploy.
+    // Still send cycle summary for NO DEPLOY / errors (not for pure deployed to avoid double spam).
+    if (telegramEnabled()) {
+      const status = classifyScreenReport(content);
+      if (status !== "deployed") {
+        await notifyScreen({
+          chain: config.chain.id,
+          dex: config.dex.id,
+          status,
+          summary: content,
+          dry_run: isDryRun(),
+        }).catch(() => {});
+      }
+    }
     return content;
   } catch (e) {
     log("cron_error", e.message);
+    if (telegramEnabled()) {
+      await notifyScreen({
+        chain: config.chain.id,
+        dex: config.dex.id,
+        status: "error",
+        summary: e.message,
+        dry_run: isDryRun(),
+      }).catch(() => {});
+    }
     return `Screening failed: ${e.message}`;
   } finally {
     _screenBusy = false;
@@ -90,6 +150,18 @@ export async function runManagementCycle({ silent = false } = {}) {
       if (rule?.action === "CLOSE") {
         const r = await closePosition({ position_id: p.position, reason: rule.reason });
         actions.push({ pair: p.pair, ...rule, result: r });
+        // Direct close path (not via executor) — notify here
+        if (r?.success && telegramEnabled()) {
+          await notifyClose({
+            pair: p.pair,
+            position_id: p.position,
+            reason: rule.reason,
+            pnl_pct: p.pnl_pct,
+            chain: config.chain.id,
+            dry_run: !!(r.dry_run || isDryRun()),
+            tx: r.tx || null,
+          }).catch(() => {});
+        }
       }
     }
 
@@ -98,6 +170,13 @@ export async function runManagementCycle({ silent = false } = {}) {
         ? actions.map((a) => `${a.pair}: CLOSE (${a.reason})`).join("\n")
         : "All positions STAY";
     if (!silent) console.log(report);
+    if (telegramEnabled() && actions.length > 0) {
+      await notifyManage({
+        chain: config.chain.id,
+        summary: report,
+        dry_run: isDryRun(),
+      }).catch(() => {});
+    }
     return report;
   } catch (e) {
     log("cron_error", e.message);
@@ -122,6 +201,15 @@ if (isMain) {
   console.log("evm-lp-agent daemon");
   console.log(`Chain: ${config.chain.name} | DEX: ${config.dex.name} | DRY_RUN=${isDryRun()}`);
   console.log("Markets:", listSupportedMarkets().map((m) => `${m.chain}/${m.dex}`).join(", "));
+  console.log(`Telegram: ${telegramEnabled() ? "enabled" : "disabled (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID)"}`);
+  if (telegramEnabled()) {
+    sendHTML(
+      `🤖 <b>evm-lp-agent started</b>\n` +
+        `Chain: ${config.chain.name}\n` +
+        `DEX: ${config.dex.name}\n` +
+        `DRY_RUN: ${isDryRun()}`,
+    ).catch(() => {});
+  }
   startCron();
   runScreeningCycle({ silent: false }).catch((e) => log("startup_error", e.message));
 }
