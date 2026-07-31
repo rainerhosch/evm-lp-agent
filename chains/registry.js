@@ -180,11 +180,7 @@ export function listSupportedMarkets() {
     { chain: "base", dex: "uniswap_v3", note: "Base Uniswap V3" },
     { chain: "arbitrum", dex: "uniswap_v3", note: "Arbitrum Uniswap V3" },
     { chain: "bsc", dex: "pancakeswap_v3", note: "BNB Chain PancakeSwap V3" },
-    {
-      chain: "robinhood",
-      dex: "uniswap_v3",
-      note: "Robinhood Chain (4663) Uniswap V3 — geckoNetwork=robinhood (not eth)",
-    },
+    { chain: "robinhood", dex: "uniswap_v3", note: "Robinhood Chainm Uniswap V3" },
     { chain: "monad", dex: "uniswap_v3", note: "Monad Uniswap V3" },
   ];
 }
