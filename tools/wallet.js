@@ -34,7 +34,8 @@ function ensureResetsRegistered() {
 export function getProvider() {
   ensureResetsRegistered();
   if (!_provider) {
-    _provider = new ethers.JsonRpcProvider(config.rpcUrl, config.chain.chainId);
+    // Pass staticNetwork: true to prevent ethers v6 from infinitely retrying network detection if the RPC is dead
+    _provider = new ethers.JsonRpcProvider(config.rpcUrl, config.chain.chainId, { staticNetwork: true });
   }
   return _provider;
 }
