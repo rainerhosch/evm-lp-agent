@@ -81,6 +81,17 @@ export function applyChain(chainName) {
 }
 
 /**
+ * Switch process-wide active DEX (for switching between V3 and V4).
+ */
+export function applyDex(dexId) {
+  const chain = config.chain || resolveChain("ethereum");
+  const dex = resolveDex(chain, dexId);
+  config.dex = dex;
+  log("chain", `Active dex → ${dex.name} on ${chain.name}`);
+  return { chain, dex };
+}
+
+/**
  * Run async work on a chain, then restore previous chain.
  */
 export async function withChain(chainName, fn) {

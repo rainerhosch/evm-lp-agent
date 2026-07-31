@@ -94,7 +94,7 @@ export const CHAINS = {
   },
   monad: {
     id: "monad",
-    chainId: 10143,
+    chainId: 143,
     name: "Monad",
     nativeSymbol: "MON",
     wrappedNative: "0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701",
@@ -121,14 +121,14 @@ export const DEXES = {
       // Robinhood Chain — verified has contract code + factory feeAmountTickSpacing works
       4663: "0x73991a25c818bf1f1128deaab1492d45638de0d3",
       // Monad
-      10143: "0x5e325eaB19E52Edf280961726aAca4e022513f54", // Using a placeholder/Uniswap V3 mock NPM for Monad
+      143: "0x5e325eaB19E52Edf280961726aAca4e022513f54", // Using a placeholder/Uniswap V3 mock NPM for Monad
     },
     factory: {
       1: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
       42161: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       4663: "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
-      10143: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+      143: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
     },
     feeTiers: [100, 500, 3000, 10000],
   },
@@ -144,6 +144,28 @@ export const DEXES = {
     },
     // Pancake uses same fee notion (1e-6) as Uni V3 for common tiers
     feeTiers: [100, 500, 2500, 10000],
+  },
+  uniswap_v4: {
+    id: "uniswap_v4",
+    name: "Uniswap V4",
+    kind: "univ4",
+    // V4 uses a singleton PoolManager instead of Factory
+    poolManager: {
+      1: "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      8453: "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      42161: "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      4663: "0x8366a39cc670b4001a1121b8f6a443a643e40951",
+      143: "0x188d586ddcf52439676ca21a244753fa19f9ea8", // Mock/placeholder on Monad
+    },
+    // V4 PositionManager for LP NFT interactions
+    positionManager: {
+      1: "0xb63D2278fbfC8C8592E56475510620DeD1A8d5dc",
+      8453: "0xb63D2278fbfC8C8592E56475510620DeD1A8d5dc",
+      42161: "0xb63D2278fbfC8C8592E56475510620DeD1A8d5dc",
+      4663: "0x58daec3116aae6d93017baaea7749052e8a04fa7",
+      143: "0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016", // Mock/placeholder on Monad
+    },
+    feeTiers: [100, 500, 3000, 10000], // V4 can theoretically support any fee, but we use defaults for bots
   },
 };
 
@@ -169,7 +191,8 @@ export function resolveDex(chain, dexHint = "auto") {
   return {
     ...dex,
     positionManagerAddress: pm,
-    factoryAddress: dex.factory[chainInfo.chainId] || null,
+    poolManagerAddress: dex.poolManager?.[chainInfo.chainId] || null,
+    factoryAddress: dex.factory?.[chainInfo.chainId] || null,
     chain: chainInfo,
   };
 }
@@ -177,10 +200,14 @@ export function resolveDex(chain, dexHint = "auto") {
 export function listSupportedMarkets() {
   return [
     { chain: "ethereum", dex: "uniswap_v3", note: "ETH mainnet Uniswap V3" },
+    { chain: "ethereum", dex: "uniswap_v4", note: "ETH mainnet Uniswap V4 (Beta)" },
     { chain: "base", dex: "uniswap_v3", note: "Base Uniswap V3" },
+    { chain: "base", dex: "uniswap_v4", note: "Base Uniswap V4 (Beta)" },
     { chain: "arbitrum", dex: "uniswap_v3", note: "Arbitrum Uniswap V3" },
+    { chain: "arbitrum", dex: "uniswap_v4", note: "Arbitrum Uniswap V4 (Beta)" },
     { chain: "bsc", dex: "pancakeswap_v3", note: "BNB Chain PancakeSwap V3" },
-    { chain: "robinhood", dex: "uniswap_v3", note: "Robinhood Chainm Uniswap V3" },
+    { chain: "robinhood", dex: "uniswap_v3", note: "Robinhood Chain Uniswap V3" },
     { chain: "monad", dex: "uniswap_v3", note: "Monad Uniswap V3" },
+    { chain: "monad", dex: "uniswap_v4", note: "Monad Uniswap V4 (Beta)" },
   ];
 }

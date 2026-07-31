@@ -1,7 +1,6 @@
 import { config, computeDeployAmount, isDryRun } from "../config.js";
 import { getWalletBalances } from "./wallet.js";
 import { getTopCandidates, getPoolDetail, discoverPools } from "./screening.js";
-import { deployPosition, getMyPositions, closePosition, claimFees } from "./univ3.js";
 import { log, logAction } from "../logger.js";
 import { checkExitRules } from "../risk.js";
 import { notifyDeploy, notifyClose } from "../telegram.js";
@@ -14,10 +13,10 @@ const toolMap = {
   get_top_candidates: getTopCandidates,
   discover_pools: discoverPools,
   get_pool_detail: getPoolDetail,
-  get_my_positions: getMyPositions,
-  deploy_position: deployPosition,
-  close_position: closePosition,
-  claim_fees: claimFees,
+  get_my_positions: async (args) => (await getDexAdapter()).getMyPositions(args),
+  deploy_position: async (args) => (await getDexAdapter()).deployPosition(args),
+  close_position: async (args) => (await getDexAdapter()).closePosition(args),
+  claim_fees: async (args) => (await getDexAdapter()).claimFees(args),
   get_native_price: async () => getNativeUsdPrice(config.chain),
   get_config: async () => ({
     chain: config.chain,
@@ -45,6 +44,13 @@ const toolMap = {
   },
 };
 
+async function getDexAdapter() {
+  if (config.dex.kind === "univ4") {
+    return await import("./univ4.js");
+  }
+  return await import("./univ3.js");
+}
+
 async function runSafetyChecks(name, args) {
   if (name === "deploy_position") {
     if (!args.pool_address) return { pass: false, reason: "pool_address required" };
@@ -55,7 +61,8 @@ async function runSafetyChecks(name, args) {
     if (amount > config.risk.maxDeployAmount) {
       return { pass: false, reason: `amount exceeds maxDeployAmount` };
     }
-    const positions = await getMyPositions({ force: true });
+    const adapter = await getDexAdapter();
+    const positions = await adapter.getMyPositions({ force: true });
     if (positions.total_positions >= config.risk.maxPositions) {
       return { pass: false, reason: `maxPositions ${config.risk.maxPositions} reached` };
     }

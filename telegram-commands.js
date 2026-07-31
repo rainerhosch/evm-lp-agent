@@ -25,6 +25,7 @@ import {
   listChainIds,
   marketsHelp,
   isValidChain,
+  applyDex,
 } from "./chain-runtime.js";
 import {
   balanceOnChain,
@@ -74,6 +75,7 @@ export function formatHelpText() {
     "/config — runtime config",
     "/markets — chains / DEXes",
     "/chain &lt;name&gt; — switch default active chain",
+    "/dex &lt;name&gt; — switch active DEX (e.g. uniswap_v4)",
     "",
     "<b>Actions</b>",
     "/screen [--chain name] — AI screen + deploy",
@@ -327,6 +329,21 @@ async function dispatch(rawText) {
       }
       const r = applyChain(target);
       await reply(`✅ Active chain → <b>${esc(r.chain.name)}</b> (${esc(r.chain.id)})\nDEX: ${esc(r.dex.name)}`);
+      return;
+    }
+
+    case "dex": {
+      const target = args[0];
+      if (!target) {
+        await reply(`Active DEX: <code>${esc(config.dex.id)}</code>\nSet: /dex uniswap_v3|uniswap_v4|pancakeswap_v3`);
+        return;
+      }
+      try {
+        const r = applyDex(target);
+        await reply(`✅ Active DEX → <b>${esc(r.dex.name)}</b> on ${esc(r.chain.name)}`);
+      } catch (e) {
+        await reply(`❌ ${esc(e.message)}`);
+      }
       return;
     }
 

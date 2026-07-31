@@ -31,6 +31,7 @@ function parsePool(item, network) {
   const isV3 =
     /uniswap.*v3|pancakeswap.*v3|pancake-v3|uniswap-v3/i.test(dexId) ||
     /v3/i.test(dexId);
+  const isV4 = /uniswap.*v4|uniswap-v4|v4/i.test(dexId);
 
   const baseTokenRaw = rel.base_token?.data?.id || "";
   const baseTokenAddr = baseTokenRaw.includes("_") ? baseTokenRaw.split("_")[1] : baseTokenRaw;
@@ -41,6 +42,7 @@ function parsePool(item, network) {
     network,
     dex_id: dexId,
     is_v3: isV3,
+    is_v4: isV4,
     tvl_usd: Math.round(tvl),
     volume_24h_usd: Math.round(vol),
     fee_pct_guess: feePct,
@@ -83,18 +85,23 @@ export async function discoverPools({ page = 1, limit = 20 } = {}) {
   const items = Array.isArray(data.data) ? data.data : [];
   let pools = items.map((i) => parsePool(i, network));
 
-  // Prefer V3 DEXes matching our registry
-  const prefer =
-    config.dex.id === "pancakeswap_v3"
-      ? /pancake/i
-      : /uniswap/i;
+  // Prefer matching DEXes based on config
+  let prefer;
+  if (config.dex.id === "pancakeswap_v3") prefer = /pancake/i;
+  else if (config.dex.kind === "univ4") prefer = /uniswap.*v4|v4/i;
+  else prefer = /uniswap/i;
 
   const preferred = pools.filter((p) => prefer.test(p.dex_id));
   if (preferred.length >= 3) pools = preferred;
 
-  // Soft-prefer is_v3 if gecko tags allow
-  const v3 = pools.filter((p) => p.is_v3);
-  if (v3.length >= 3) pools = v3;
+  // Soft-prefer is_v3/is_v4 if gecko tags allow and we didn't get enough exact matches
+  if (config.dex.kind === "univ4") {
+    const v4 = pools.filter((p) => p.is_v4);
+    if (v4.length >= 3) pools = v4;
+  } else {
+    const v3 = pools.filter((p) => p.is_v3);
+    if (v3.length >= 3) pools = v3;
+  }
 
   return {
     network,
