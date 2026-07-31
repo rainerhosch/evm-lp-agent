@@ -70,11 +70,13 @@ export const config = {
   },
 
   screening: {
-    minTvlUsd: u.minTvlUsd ?? 50_000,
-    minVolume24hUsd: u.minVolume24hUsd ?? 20_000,
-    minFeeAprPct: u.minFeeAprPct ?? 5,
+    // Chain-specific defaults (e.g. robinhood has thinner books than mainnet)
+    minTvlUsd: u.minTvlUsd ?? chain.screeningDefaults?.minTvlUsd ?? 50_000,
+    minVolume24hUsd: u.minVolume24hUsd ?? chain.screeningDefaults?.minVolume24hUsd ?? 20_000,
+    minFeeAprPct: u.minFeeAprPct ?? chain.screeningDefaults?.minFeeAprPct ?? 5,
     maxTopPoolRank: u.maxTopPoolRank ?? 50,
-    geckoNetwork: chain.geckoNetwork,
+    // Must match GeckoTerminal network id for THIS chain (never reuse eth for L2s)
+    geckoNetwork: u.geckoNetwork || chain.geckoNetwork,
   },
 
   schedule: {

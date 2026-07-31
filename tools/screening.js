@@ -58,6 +58,20 @@ function guessFeePct(attrs) {
  */
 export async function discoverPools({ page = 1, limit = 20 } = {}) {
   const network = config.screening.geckoNetwork;
+  const chainId = config.chain.id;
+
+  // Guard: never silently screen a different chain's pools
+  if (chainId === "robinhood" && network === "eth") {
+    throw new Error(
+      'Misconfigured screening: chain=robinhood but geckoNetwork=eth (Ethereum mainnet). Set geckoNetwork to "robinhood".',
+    );
+  }
+  if (chainId === "ethereum" && network === "robinhood") {
+    throw new Error(
+      "Misconfigured screening: chain=ethereum but geckoNetwork=robinhood.",
+    );
+  }
+
   const data = await geckoFetch(
     `/networks/${network}/pools?page=${page}&sort=h24_volume_usd_desc`,
   );
@@ -80,6 +94,7 @@ export async function discoverPools({ page = 1, limit = 20 } = {}) {
   return {
     network,
     chain: config.chain.id,
+    chain_id: config.chain.chainId,
     dex: config.dex.id,
     total: pools.length,
     pools: pools.slice(0, limit),

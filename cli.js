@@ -50,17 +50,18 @@ Usage: node cli.js <cmd> [flags]
 
 Commands:
   markets                 List supported chain/DEX pairs
-  balance [--chain ethereum|bsc|base|arbitrum]
+  balance [--chain ethereum|bsc|base|arbitrum|robinhood]
   positions
-  candidates [--limit 10]
+  candidates [--limit 10] [--chain ...]
   pool-detail --pool <addr>
   deploy --pool <addr> [--amount 0.015] [--dry-run]
   close --position <id> [--reason text]
-  screen [--dry-run] [--silent]
+  screen [--dry-run] [--silent] [--chain ...]
   manage [--dry-run] [--silent]
-  config
+  config [--chain ...]
 
-Env: EVM_PRIVATE_KEY, ETH_RPC_URL / BSC_RPC_URL, OPENROUTER_API_KEY, DRY_RUN, EVM_CHAIN
+Env: EVM_PRIVATE_KEY, ETH_RPC_URL / BSC_RPC_URL / RH_RPC_URL, OPENROUTER_API_KEY, DRY_RUN, EVM_CHAIN
+Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
 `);
     break;
   }

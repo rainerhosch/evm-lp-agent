@@ -1,9 +1,14 @@
 /**
  * Chain + DEX registry for Uniswap V3 family and PancakeSwap V3.
  *
- * "Robinhood on Uniswap" is treated as Ethereum mainnet Uniswap V3
- * (primary CEX-adjacent retail flow often settles on ETH/L2 Uniswap).
- * BSC uses PancakeSwap V3.
+ * Robinhood Chain (chainId 4663) is a separate L2 with its own Uniswap V3 deployment.
+ * Do NOT point geckoNetwork/dexscreener at ethereum — that returns mainnet pools
+ * that do not exist on Robinhood.
+ *
+ * Docs:
+ * - https://blog.uniswap.org/robinhood-chain-is-live
+ * - https://docs.robinhood.com/chain/connecting/
+ * - GeckoTerminal network id: "robinhood"
  */
 
 export const CHAINS = {
@@ -17,7 +22,6 @@ export const CHAINS = {
     geckoNetwork: "eth",
     dexscreener: "ethereum",
     defaultDex: "uniswap_v3",
-    npm: "NonfungiblePositionManager",
   },
   base: {
     id: "base",
@@ -52,17 +56,28 @@ export const CHAINS = {
     dexscreener: "bsc",
     defaultDex: "pancakeswap_v3",
   },
+  /**
+   * Robinhood Chain — Arbitrum-style L2, ETH gas, Uniswap V2/V3/V4 live.
+   * chainId 4663 ("hood" on phone keypad). RPC: rpc.mainnet.chain.robinhood.com
+   */
   robinhood: {
     id: "robinhood",
     chainId: 4663,
-    name: "Robinhood",
+    name: "Robinhood Chain",
     nativeSymbol: "ETH",
+    // WETH on Robinhood (verified bytecode on-chain)
     wrappedNative: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-    explorer: "https://robinhoodchain.blockscout.com/",
-    geckoNetwork: "eth",
-    dexscreener: "ethereum",
+    explorer: "https://robinhoodchain.blockscout.com",
+    // CRITICAL: must be "robinhood", not "eth" — eth returns Ethereum mainnet pools
+    geckoNetwork: "robinhood",
+    dexscreener: "robinhood",
     defaultDex: "uniswap_v3",
-    npm: "NonfungiblePositionManager",
+    // Newer chain: lower TVL books are normal vs mainnet
+    screeningDefaults: {
+      minTvlUsd: 5_000,
+      minVolume24hUsd: 1_000,
+      minFeeAprPct: 1,
+    },
   },
 };
 
@@ -77,14 +92,14 @@ export const DEXES = {
       1: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
       8453: "0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1",
       42161: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
-      4663: "0x73991a25c818bf1f1128deaab1492d45638de0d3"
-
+      // Robinhood Chain — verified has contract code + factory feeAmountTickSpacing works
+      4663: "0x73991a25c818bf1f1128deaab1492d45638de0d3",
     },
     factory: {
       1: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
       42161: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
-      4663: "0x1f7d7550b1b028f7571e69a784071f0205fd2efa"
+      4663: "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
     },
     feeTiers: [100, 500, 3000, 10000],
   },
@@ -104,11 +119,12 @@ export const DEXES = {
 };
 
 export function resolveChain(chainIdOrName) {
-  const key = String(chainIdOrName || "ethereum").toLowerCase();
+  const key = String(chainIdOrName || "ethereum").toLowerCase().trim();
   if (CHAINS[key]) return CHAINS[key];
   const byId = Object.values(CHAINS).find((c) => String(c.chainId) === key);
   if (byId) return byId;
-  throw new Error(`Unknown chain: ${chainIdOrName}. Use ethereum | bsc | base | arbitrum`);
+  const known = Object.keys(CHAINS).join(" | ");
+  throw new Error(`Unknown chain: ${chainIdOrName}. Use ${known}`);
 }
 
 export function resolveDex(chain, dexHint = "auto") {
@@ -131,10 +147,14 @@ export function resolveDex(chain, dexHint = "auto") {
 
 export function listSupportedMarkets() {
   return [
-    { chain: "ethereum", dex: "uniswap_v3", note: "ETH mainnet Uniswap V3 (primary)" },
+    { chain: "ethereum", dex: "uniswap_v3", note: "ETH mainnet Uniswap V3" },
     { chain: "base", dex: "uniswap_v3", note: "Base Uniswap V3" },
     { chain: "arbitrum", dex: "uniswap_v3", note: "Arbitrum Uniswap V3" },
     { chain: "bsc", dex: "pancakeswap_v3", note: "BNB Chain PancakeSwap V3" },
-    { chain: "robinhood", dex: "uniswap_v3", note: "Robinhood Uniswap V3" },
+    {
+      chain: "robinhood",
+      dex: "uniswap_v3",
+      note: "Robinhood Chain (4663) Uniswap V3 — geckoNetwork=robinhood (not eth)",
+    },
   ];
 }
