@@ -130,6 +130,13 @@ export const DEXES = {
       4663: "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
       143: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
     },
+    subgraphUrl: {
+      1: "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3",
+      8453: "https://api.studio.thegraph.com/query/45376/uniswap-v3-base/version/latest",
+      42161: "https://api.thegraph.com/subgraphs/name/ianlapham/arbitrum-minimal",
+      4663: null, // No official subgraph for Robinhood yet
+      143: null,  // No official subgraph for Monad yet
+    },
     feeTiers: [100, 500, 3000, 10000],
   },
   pancakeswap_v3: {
@@ -142,6 +149,9 @@ export const DEXES = {
     factory: {
       56: "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
     },
+    subgraphUrl: {
+      56: "https://api.thegraph.com/subgraphs/name/pancakeswap/exchange-v3-bsc",
+    },
     // Pancake uses same fee notion (1e-6) as Uni V3 for common tiers
     feeTiers: [100, 500, 2500, 10000],
   },
@@ -152,20 +162,26 @@ export const DEXES = {
     // V4 uses a singleton PoolManager instead of Factory
     poolManager: {
       1: "0x000000000004444c5dc75cB358380D2e3dE08A90",
-      8453: "0x000000000004444c5dc75cB358380D2e3dE08A90",
-      42161: "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      8453: "0x498581ff718922c3f8e6a244956af099b2652b2b",
+      42161: "0x360e68faccca8ca495c1b759fd9eee466db9fb32",
       4663: "0x8366a39cc670b4001a1121b8f6a443a643e40951",
-      143: "0x188d586ddcf52439676ca21a244753fa19f9ea8", // Mock/placeholder on Monad
+      143: "0x188d586ddcf52439676ca21a244753fa19f9ea8e", // Mock/placeholder on Monad
     },
     // V4 PositionManager for LP NFT interactions
     positionManager: {
       1: "0xb63D2278fbfC8C8592E56475510620DeD1A8d5dc",
-      8453: "0xb63D2278fbfC8C8592E56475510620DeD1A8d5dc",
-      42161: "0xb63D2278fbfC8C8592E56475510620DeD1A8d5dc",
+      8453: "0x7c5f5a4bbd8fd63184577525326123b519429bdc",
+      42161: "0xd88f38f930b7952f2db2432cb002e7abbf3dd869",
       4663: "0x58daec3116aae6d93017baaea7749052e8a04fa7",
       143: "0x5b7ec4a94ff9bedb700fb82ab09d5846972f4016", // Mock/placeholder on Monad
     },
     feeTiers: [100, 500, 3000, 10000], // V4 can theoretically support any fee, but we use defaults for bots
+    subgraphUrl: {
+      // Typically different for V4, using placeholders until official
+      1: null,
+      8453: null,
+      42161: null,
+    },
   },
 };
 
@@ -193,6 +209,7 @@ export function resolveDex(chain, dexHint = "auto") {
     positionManagerAddress: pm,
     poolManagerAddress: dex.poolManager?.[chainInfo.chainId] || null,
     factoryAddress: dex.factory?.[chainInfo.chainId] || null,
+    subgraphUrl: dex.subgraphUrl?.[chainInfo.chainId] || null,
     chain: chainInfo,
   };
 }

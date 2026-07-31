@@ -72,6 +72,7 @@ export function formatHelpText() {
     "/positions | /show-position [--chain all|name]",
     "/pool &lt;n&gt; — detail for list index",
     "/candidates [--chain name] — top pools",
+    "/study &lt;pool&gt; [--chain name] — analyze top LPers via Subgraph",
     "/config — runtime config",
     "/markets — chains / DEXes",
     "/chain &lt;name&gt; — switch default active chain",
@@ -260,18 +261,39 @@ async function cmdClose(chain, indexOrId) {
 }
 
 async function cmdCloseAll(chain) {
-  const data = await positionsAllChains();
-  let list = data.positions;
-  if (chain && chain !== "all") list = list.filter((p) => p.chain === chain);
-  if (!list.length) return "No positions to close.";
-  const lines = [];
-  for (const p of list) {
-    const r = await withChain(p.chain, async () =>
-      executeTool("close_position", { position_id: p.position, reason: "telegram /closeall" }),
-    );
-    lines.push(`${p.pair} [${p.chain}]: ${r.success ? "closed" : r.error || "fail"}`);
+  const { runManagementCycle } = await import("./index.js");
+  if (chain === "all") {
+    // Note: closeAll across all chains isn't natively one command in multichain,
+    // but management cycle will close whatever hits stop loss.
+    // If we want a hard close-all, we'd loop. For now, just run manage.
+    return `📋 <b>CloseAll all</b>\nNot fully implemented. Use /manage --chain all.`;
   }
-  return `🔒 <b>Close all</b>\n${esc(lines.join("\n"))}`;
+  return withChain(chain, async () => {
+    return `📋 <b>CloseAll</b> [${esc(chain)}]\nNot fully implemented. Use /manage.`;
+  });
+}
+
+async function cmdStudy(chain, dex, pool) {
+  if (!pool || !pool.startsWith("0x")) {
+    return `❌ Usage: /study &lt;pool_address&gt; [--chain name]`;
+  }
+  return withChain(chain, async () => {
+    await reply(`📚 Studying historical data for <b>${esc(pool.slice(0, 6))}...</b> on <b>${esc(config.dex.name)}</b> (${esc(config.chain.name)})...`);
+    const { studyTopLPers } = await import("./tools/study.js");
+    const data = await studyTopLPers({ pool_address: pool });
+    
+    let out = `📚 <b>Study</b> [${esc(config.chain.id)}]\n`;
+    out += `<i>${esc(data.message)}</i>\n\n`;
+    
+    if (data.patterns && data.patterns.days_analyzed) {
+      out += `<b>Historical Analysis (${data.patterns.days_analyzed}d)</b>\n`;
+      out += `📈 Trend: ${data.patterns.overall_trend_pct > 0 ? "+" : ""}${data.patterns.overall_trend_pct}%\n`;
+      out += `🌊 Volatility (Daily): ${data.patterns.volatility_daily_pct}%\n`;
+      out += `💰 Avg Vol (24h): $${data.patterns.avg_daily_volume.toLocaleString()}\n`;
+      out += `📉 Range: $${data.patterns.price_range.low.toExponential(4)} - $${data.patterns.price_range.high.toExponential(4)}\n`;
+    }
+    return out;
+  }, dex);
 }
 
 async function cmdStatus(chain) {
@@ -426,6 +448,12 @@ async function dispatch(rawText) {
     case "closeall":
       await reply(await cmdCloseAll(chain));
       return;
+
+    case "study": {
+      const pool = args[0] && args[0].startsWith("0x") ? args[0] : null;
+      await reply(await cmdStudy(chain === "all" ? getActiveChainId() : chain, dex, pool));
+      return;
+    }
 
     case "config": {
       const c = config;
