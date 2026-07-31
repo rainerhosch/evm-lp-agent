@@ -6,7 +6,7 @@ import { log } from "../logger.js";
  * This avoids relying on unreliable or rate-limited GraphQL subgraphs.
  */
 export async function studyTopLPers({ pool_address, limit = 30 }) {
-  const geckoNetwork = config.chain.geckoNetwork;
+  const geckoNetwork = config.screening.geckoNetwork;
   if (!geckoNetwork) {
     return {
       pool: pool_address,

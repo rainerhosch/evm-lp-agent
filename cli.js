@@ -102,6 +102,13 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
     break;
   }
 
+  case "study": {
+    if (!flags.pool) die("Usage: study --pool <address>");
+    const { studyTopLPers } = await import("./tools/study.js");
+    out(await studyTopLPers({ pool_address: flags.pool }));
+    break;
+  }
+
   case "deploy": {
     if (!flags.pool) die("Usage: deploy --pool <address> [--amount n]");
     // Route through executor so Telegram notifyDeploy fires
