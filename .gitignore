@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+user-config.json
+state.json
+lessons.json
+pool-memory.json
+decision-log.json
+logs/
+*.log
+.DS_Store

@@ -1,0 +1,57 @@
+{
+  "preset": "micro",
+  "chain": "ethereum",
+  "dex": "auto",
+  "dryRun": true,
+
+  "rpcUrls": {
+    "ethereum": "https://ethereum.publicnode.com",
+    "bsc": "https://bsc-dataseed.binance.org",
+    "base": "https://mainnet.base.org",
+    "arbitrum": "https://arb1.arbitrum.io/rpc"
+  },
+
+  "deployAmountNative": 0.015,
+  "maxDeployAmount": 0.05,
+  "gasReserve": 0.006,
+  "positionSizePct": 0.75,
+  "maxPositions": 1,
+  "minNativeToOpen": 0.02,
+
+  "feeTiers": [500, 3000, 10000],
+  "tickRangeWidth": 60,
+  "preferStableQuote": true,
+
+  "minTvlUsd": 50000,
+  "minVolume24hUsd": 20000,
+  "minFeeAprPct": 5,
+  "maxTopPoolRank": 50,
+
+  "stopLossPct": -25,
+  "takeProfitPct": 8,
+  "trailingTakeProfit": true,
+  "trailingTriggerPct": 3,
+  "trailingDropPct": 1.5,
+  "outOfRangeWaitMinutes": 30,
+  "maxHoldMinutes": 360,
+  "minClaimAmountUsd": 1,
+  "dailyLossLimitNative": 0.01,
+  "dailyLossLimitEnabled": true,
+
+  "managementIntervalMin": 10,
+  "screeningIntervalMin": 30,
+
+  "temperature": 0.3,
+  "maxTokens": 4096,
+  "maxSteps": 12,
+  "llmModel": "openrouter/free",
+  "screeningModel": "openrouter/free",
+  "managementModel": "openrouter/free",
+  "generalModel": "openrouter/free",
+  "reasoningEnabled": true,
+  "reasoningEffort": "medium",
+  "reasoningExclude": false,
+  "logReasoning": true,
+  "openRouterHttpReferer": "https://github.com/evm-lp-agent",
+  "openRouterAppTitle": "evm-lp-agent"
+}

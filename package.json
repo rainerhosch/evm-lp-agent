@@ -1,0 +1,32 @@
+{
+  "name": "evm-lp-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Autonomous concentrated-liquidity LP agent for Uniswap V3 (EVM) and PancakeSwap V3 (BSC)",
+  "main": "index.js",
+  "bin": {
+    "evm-lp": "cli.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "cross-env DRY_RUN=true node index.js",
+    "cli": "node cli.js",
+    "test": "node --check config.js && node --check cli.js && node --check agent.js && node test/test-risk.js",
+    "balance": "node cli.js balance",
+    "candidates": "node cli.js candidates",
+    "screen": "node cli.js screen --dry-run",
+    "manage": "node cli.js manage --dry-run"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "ethers": "^6.13.5",
+    "node-cron": "^3.0.3",
+    "openai": "^4.73.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
+}
