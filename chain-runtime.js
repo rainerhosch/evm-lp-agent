@@ -32,6 +32,7 @@ function rpcFor(chain) {
       base: "https://mainnet.base.org",
       arbitrum: "https://arb1.arbitrum.io/rpc",
       robinhood: "https://rpc.mainnet.chain.robinhood.com",
+      monad: "https://rpc.monad.xyz",
     }[chain.id]
   );
 }
@@ -98,7 +99,7 @@ export async function withChain(chainName, fn, targetDex = null) {
   const prevChain = getActiveChainId();
   const prevDex = config.dex?.id;
   const needSwitchChain = chainName && chainName !== "all" && chainName !== prevChain;
-  
+
   if (needSwitchChain) {
     applyChain(chainName);
   }
