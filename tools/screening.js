@@ -4,6 +4,7 @@
 import { config } from "../config.js";
 import { scorePool } from "../risk.js";
 import { log } from "../logger.js";
+import { getGmgnTokenInfo, hasGmgnApiKey } from "./gmgn.js";
 
 const GECKO = "https://api.geckoterminal.com/api/v2";
 
@@ -31,6 +32,9 @@ function parsePool(item, network) {
     /uniswap.*v3|pancakeswap.*v3|pancake-v3|uniswap-v3/i.test(dexId) ||
     /v3/i.test(dexId);
 
+  const baseTokenRaw = rel.base_token?.data?.id || "";
+  const baseTokenAddr = baseTokenRaw.includes("_") ? baseTokenRaw.split("_")[1] : baseTokenRaw;
+
   return {
     pool: a.address,
     name,
@@ -44,6 +48,7 @@ function parsePool(item, network) {
     price_change_24h: Number(a.price_change_percentage?.h24 ?? 0),
     base_token_price_usd: base != null ? Number(base) : null,
     transactions_24h: Number(a.transactions?.h24?.buys || 0) + Number(a.transactions?.h24?.sells || 0),
+    base_token_address: baseTokenAddr,
   };
 }
 
@@ -121,7 +126,41 @@ export async function getTopCandidates({ limit = 10 } = {}) {
         return false;
       }
       return true;
-    })
+    });
+
+  if (hasGmgnApiKey() && eligible.length > 0) {
+    await Promise.allSettled(
+      eligible.map(async (p) => {
+        if (!p.base_token_address) return;
+        const gmgnInfo = await getGmgnTokenInfo(p.base_token_address, config.chain.id);
+        if (gmgnInfo) {
+          p.gmgn = gmgnInfo;
+          p.holders = gmgnInfo.holders;
+          p.market_cap = gmgnInfo.market_cap;
+        }
+      })
+    );
+  }
+
+  const screened = eligible.filter((p) => {
+    if (p.gmgn) {
+      if (p.gmgn.is_honeypot) {
+        filteredOut.push({ name: p.name, reason: "GMGN: Honeypot" });
+        return false;
+      }
+      if (p.gmgn.is_blacklisted) {
+        filteredOut.push({ name: p.name, reason: "GMGN: Blacklisted" });
+        return false;
+      }
+      if (p.gmgn.has_high_supply_concentration) {
+        filteredOut.push({ name: p.name, reason: "GMGN: High top-10 concentration" });
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const finalCandidates = screened
     .map((p) => ({ ...p, rank_score: scorePool(p) }))
     .sort((a, b) => b.rank_score - a.rank_score)
     .slice(0, limit);
@@ -134,7 +173,7 @@ export async function getTopCandidates({ limit = 10 } = {}) {
   return {
     chain: config.chain.id,
     dex: config.dex.id,
-    candidates: eligible,
+    candidates: finalCandidates,
     total_screened: discovery.pools.length,
     filtered_examples: filteredOut.slice(0, 5),
   };

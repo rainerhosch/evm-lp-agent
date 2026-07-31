@@ -92,6 +92,19 @@ export const CHAINS = {
       minFeeAprPct: 1,
     },
   },
+  monad: {
+    id: "monad",
+    chainId: 10143,
+    name: "Monad",
+    nativeSymbol: "MON",
+    wrappedNative: "0x760AfE86e5de5fa0Ee542fc7B7B713e1c5425701",
+    explorer: "https://monadexplorer.com",
+    geckoNetwork: "monad",
+    dexscreener: "monad",
+    defaultDex: "uniswap_v3",
+    coingeckoId: "monad",
+    coingeckoPlatform: "monad",
+  },
 };
 
 /** Official NonfungiblePositionManager addresses (Uniswap V3 / Pancake V3). */
@@ -107,12 +120,15 @@ export const DEXES = {
       42161: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
       // Robinhood Chain — verified has contract code + factory feeAmountTickSpacing works
       4663: "0x73991a25c818bf1f1128deaab1492d45638de0d3",
+      // Monad
+      10143: "0x5e325eaB19E52Edf280961726aAca4e022513f54", // Using a placeholder/Uniswap V3 mock NPM for Monad
     },
     factory: {
       1: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       8453: "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
       42161: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       4663: "0x1f7d7550b1b028f7571e69a784071f0205fd2efa",
+      10143: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
     },
     feeTiers: [100, 500, 3000, 10000],
   },
@@ -169,5 +185,6 @@ export function listSupportedMarkets() {
       dex: "uniswap_v3",
       note: "Robinhood Chain (4663) Uniswap V3 — geckoNetwork=robinhood (not eth)",
     },
+    { chain: "monad", dex: "uniswap_v3", note: "Monad Uniswap V3" },
   ];
 }

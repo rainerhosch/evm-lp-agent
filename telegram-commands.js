@@ -321,7 +321,7 @@ async function dispatch(rawText) {
       if (!target || target === "all") {
         await reply(
           `Active chain: <code>${esc(getActiveChainId())}</code>\n` +
-            `Set: /chain ethereum|bsc|base|arbitrum|robinhood`,
+            `Set: /chain ${listChainIds().join("|")}`,
         );
         return;
       }

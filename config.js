@@ -131,6 +131,13 @@ export const config = {
     pro: process.env.COINGECKO_PRO === "true" || u.coingeckoPro === true,
     cacheTtlMs: Number(process.env.COINGECKO_CACHE_TTL_MS || u.coingeckoCacheTtlMs || 60_000),
   },
+
+  gmgn: {
+    apiKey: process.env.GMGN_API_KEY || u.gmgnApiKey || "",
+    baseUrl: process.env.GMGN_BASE_URL || u.gmgnBaseUrl || "https://openapi.gmgn.ai",
+    requestDelayMs: u.gmgnRequestDelayMs ?? 2500,
+    maxRetries: u.gmgnMaxRetries ?? 2,
+  },
 };
 
 function defaultRpc(id) {

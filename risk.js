@@ -28,8 +28,19 @@ export function scorePool(pool) {
   const vol = Number(pool.volume_24h_usd || 0);
   const apr = Number(pool.fee_apr_pct || 0);
   const volTvl = tvl > 0 ? vol / tvl : 0;
-  // Prefer productive fee farms over pure TVL giants
-  return apr * 2 + volTvl * 50 + Math.log10(Math.max(tvl, 1)) * 5;
+  
+  // Base score from TVL, Volume, and APR
+  let score = apr * 2 + volTvl * 50 + Math.log10(Math.max(tvl, 1)) * 5;
+
+  // Bonus points for healthy holders if GMGN data is available (Meridian-like defaults)
+  if (pool.holders) {
+    const holders = Number(pool.holders);
+    if (holders > 500) score += 5;
+    if (holders > 2000) score += 5;
+    if (holders > 10000) score += 10;
+  }
+  
+  return score;
 }
 
 export function checkExitRules(position, mgmt) {
