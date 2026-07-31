@@ -8,6 +8,7 @@ Autonomous **concentrated-liquidity** LP agent for EVM DEXes:
 | **Base** | Uniswap V3 | Low-fee ETH L2 |
 | **Arbitrum** | Uniswap V3 | High-volume Uni V3 |
 | **BNB Smart Chain** | **PancakeSwap V3** | Binance ecosystem |
+| **Robinhood** | **Uniswap V3** | Robinhood ecosystem |
 
 Sibling project to Meridian (Solana / Meteora DLMM). Same ideas (screen → deploy → manage → risk), different chain stack.
 
