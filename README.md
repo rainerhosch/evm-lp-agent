@@ -1,6 +1,6 @@
 # evm-lp-agent
 
-Autonomous **concentrated-liquidity** LP agent for EVM DEXes:
+Autonomous **concentrated-liquidity** LP agent for EVM DEXes. Driven by LLMs (via Claude CLI or OpenRouter), it screens pools, evaluates charts, deploys positions, and manages risk autonomously while learning from its past trades.
 
 | Chain | DEX | Notes |
 |-------|-----|--------|
@@ -10,48 +10,101 @@ Autonomous **concentrated-liquidity** LP agent for EVM DEXes:
 | **BNB Smart Chain** | **PancakeSwap V3** | Binance ecosystem |
 | **Robinhood** | **Uniswap V3** | Robinhood ecosystem |
 
-Sibling project to Meridian (Solana / Meteora DLMM). Same ideas (screen → deploy → manage → risk), different chain stack.
+---
 
-> **v0.1:** Screening, sizing, dry-run deploy/close, LLM agent loop, and cron daemon are working.  
-> **Live on-chain mint/close** is scaffolded (NPM addresses + ABIs) but intentionally gated until tick math + ERC20 approvals are completed.
+## 🧠 How It Works
+
+The agent acts as an autonomous crypto trader specifically built for EVM Concentrated Liquidity pools (Uniswap V3 / PancakeSwap V3). It utilizes a "Hands and Brain" architecture:
+
+1. **The Hands (`cli.js`)**: A suite of local CLI tools that perform specific, deterministic actions. It fetches wallet balances, pulls OHLCV data from GeckoTerminal, computes technical analysis (RSI, Bollinger Bands), checks pool memory, and executes simulated (dry-run) or live deployments.
+2. **The Brain (LLM)**: An LLM acts as the decision-maker. It is fed specific prompts (`.claude/agents/screener.md` and `manager.md`) that teach it how to use the CLI tools. It evaluates the data returned by the tools, decides whether to deploy or close a position, and learns from its mistakes.
+3. **The Memory (`lessons.js` & `pool-memory.js`)**: Every closed position is recorded. If the agent loses money in a pool because of high volatility, it writes a "lesson" to its memory. The LLM reads these lessons before making future decisions to avoid repeating mistakes.
+4. **The Ear (`discord-listener`)**: A background process that monitors specific Discord channels for EVM token addresses (like signals from alpha groups). When it finds a valid `0x...` address, it runs pre-checks (deduplication, token blacklist, pool resolution via GeckoTerminal) and queues it for the LLM to screen.
 
 ---
 
-## OpenRouter free models
+## 🚀 Step-by-Step Setup
 
-Default LLM is **`openrouter/free`** (Free Models Router):
+### Step 1: Environment Setup
+Clone the repository and copy the example environment file:
+```bash
+cp .env.example .env
+```
+Edit `.env` and provide your keys:
+- `EVM_PRIVATE_KEY`: Your wallet's private key.
+- `OPENROUTER_API_KEY` (or use Claude CLI): API key for the LLM.
+- `EVM_CHAIN`: E.g., `ethereum`, `base`, `bsc`.
+- `DRY_RUN`: Set to `true` to simulate trades safely without spending gas.
 
-- Docs: https://openrouter.ai/openrouter/free  
-- Picks free models that support **tools** / other features your request needs  
-- Reasoning tokens: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens  
-- Agent preserves `reasoning_details` across tool-call turns  
+### Step 2: Configuration
+Copy the user config file:
+```bash
+cp user-config.example.json user-config.json
+```
+Adjust parameters for your risk profile (e.g., `deployAmountNative`, `maxPositions`).
 
-```env
-OPENROUTER_API_KEY=sk-or-v1-...
-LLM_MODEL=openrouter/free
-OPENROUTER_REASONING_EFFORT=medium
+### Step 3: Install Dependencies
+Install the required packages for the core agent:
+```bash
+npm install
 ```
 
-Optional leaderboard headers: `OPENROUTER_HTTP_REFERER`, `OPENROUTER_APP_TITLE`.
+### Step 4: Optional - Setup Discord Listener
+If you want the agent to automatically scan Discord channels for new token signals:
+1. Obtain your personal Discord User Token (from your browser's Developer Tools Network tab).
+2. Add it to `.env` as `DISCORD_USER_TOKEN`, along with `DISCORD_GUILD_ID` and `DISCORD_CHANNEL_IDS`.
+3. Start the listener in a separate terminal:
+```bash
+cd discord-listener
+npm install
+npm start
+```
 
-## Quick start
+---
+
+## 🛠️ Usage & Commands
+
+You can run the agent in **Interactive Mode** (using Claude CLI) or **Automated/Daemon Mode**.
+
+### Core CLI Commands
+
+Explore the market manually using the built-in commands:
 
 ```bash
-cd ../evm-lp-agent   # sibling of meridian-dllm-agent
-cp .env.example .env
-# edit .env: EVM_PRIVATE_KEY, OPENROUTER_API_KEY, EVM_CHAIN, DRY_RUN=true
-cp user-config.example.json user-config.json   # or use included user-config.json
-
-npm install
-node cli.js markets
+# Check wallet balance on current chain
 node cli.js balance
+
+# Find the top EVM pool candidates
 node cli.js candidates --limit 5
-node cli.js screen --dry-run --silent
+
+# Get detailed metrics for a specific pool
+node cli.js pool-detail --pool <0x_address>
+
+# Check TA chart indicators (RSI, Bollinger Bands)
+node cli.js chart --pool <0x_address> --side entry
+
+# View the agent's memory of past trades in a pool
+node cli.js pool-memory --pool <0x_address>
+
+# Review the rules the AI has learned from closed trades
+node cli.js lessons
+```
+
+### LLM Autonomous Cycles
+
+To let the AI autonomously screen candidates and deploy:
+```bash
+node cli.js screen --dry-run
+```
+
+To let the AI autonomously review open positions and manage risk (Take Profit / Stop Loss):
+```bash
 node cli.js manage --dry-run
 ```
 
-### Switch chain
+### Multi-Chain Operation
 
+Switch chains instantly via CLI flags:
 ```bash
 # Ethereum Uniswap V3 (default)
 node cli.js balance --chain ethereum
@@ -63,132 +116,29 @@ node cli.js candidates --chain bsc
 node cli.js screen --chain base --dry-run
 ```
 
-Or set in `.env` / `user-config.json`:
-```json
-{ "chain": "bsc", "dex": "auto" }
-```
+---
+
+## 🛡️ Safety & Live Execution
+
+- **Dry Run by Default**: Always start with `DRY_RUN=true` or use the `--dry-run` flag. The agent will simulate everything perfectly without broadcasting transactions.
+- **Never commit keys**: Ensure your `.env` and `user-config.json` are heavily protected.
+- **Live Execution**: Live minting requires sufficient native gas tokens (ETH/BNB). 
 
 ---
 
-## Architecture
+## 🤖 Telegram Bot Integration
 
-```
-cli.js / index.js
-    → agentLoop (SCREENER | MANAGER)
-    → executeTool → screening | univ3 | wallet
-    → GeckoTerminal pools | ethers RPC | state.json
-```
+If you set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`, the agent can be controlled remotely via Telegram. 
 
-| Module | Role |
-|--------|------|
-| `chains/registry.js` | Chain IDs, NPM addresses, Uniswap vs Pancake |
-| `tools/screening.js` | Pool discovery (GeckoTerminal) + ranking |
-| `tools/univ3.js` | V3 position deploy/close (dry-run full; live scaffold) |
-| `tools/wallet.js` | ethers v6 wallet + native balance |
-| `risk.js` | Score + stop/trailing/OOR/max-hold |
-| `state.js` | Local position registry |
-| `agent.js` | ReAct LLM tool loop |
+- `/screen --chain base` — Trigger an AI screening cycle.
+- `/manage --chain all` — Trigger risk management.
+- `/positions` — View open positions.
+- `/pause` / `/resume` — Control the automated cron daemon.
 
 ---
 
-## Config (micro wallet friendly)
+## 🗺️ Roadmap
 
-Same spirit as Meridian micro-fund settings:
-
-```json
-{
-  "deployAmountNative": 0.015,
-  "gasReserve": 0.006,
-  "maxDeployAmount": 0.018,
-  "maxPositions": 1,
-  "positionSizePct": 0.75
-}
-```
-
-Native asset = **ETH** on ethereum/base/arbitrum, **BNB** on bsc.
-
----
-
-## Safety
-
-- `DRY_RUN=true` → no on-chain txs; state updates only  
-- Never commit `.env` or `user-config.json` with keys  
-- Live mint requires explicit future work (pool `slot0` tick, token sort, approvals)
-
----
-
-## Relation to Meridian
-
-| | Meridian | evm-lp-agent |
-|--|----------|--------------|
-| Chain | Solana | EVM |
-| Venue | Meteora DLMM | Uniswap V3 / Pancake V3 |
-| Range unit | bins | ticks |
-| Position id | PDA | NFT tokenId |
-| Quote | SOL | ETH / BNB |
-
----
-
-## Telegram bot commands
-
-Requires `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. Started automatically with `node index.js`.
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Full command list |
-| `/balance --chain bsc` | Native + USD on one chain |
-| `/balance --chain all` | All chains |
-| `/status --chain all` | Snapshot |
-| `/positions` / `/show-position --chain robinhood` | Open LPs |
-| `/pool 1` | Position detail by index |
-| `/price --chain ethereum --amount 0.015` | CoinGecko USD |
-| `/candidates --chain base` | Top pools |
-| `/screen --chain robinhood` | AI screen + deploy |
-| `/manage --chain all` | Risk exits |
-| `/deploy --chain bsc --pool 0x… --amount 0.015` | Deploy LP |
-| `/close 1` or `/close --id dry-…` | Close |
-| `/closeall --chain robinhood` | Close all on chain |
-| `/chain bsc` | Switch default active chain |
-| `/markets` `/config` `/ping` | Meta |
-| `/pause` | Stop automated screen/manage cron |
-| `/resume` or `/restart` | Resume cron after pause / rate limit |
-| `/cron` | Show automation pause status |
-
-**Rate limits:** On OpenRouter `429` / `free-models-per-day`, cron **auto-pauses** (one Telegram alert). Use `/resume` when quota resets or after adding credits.
-
-Notifications (deploy/close/screen) still fire as before.
-
-## Grok skills (`.grok/skills/`)
-
-Open this repo in Grok Build to auto-load skills (same pattern as Meridian):
-
-| Slash | Purpose |
-|--------|---------|
-| `/evm-lp` | Hub + skill map |
-| `/evm-lp-balance` | Native balance |
-| `/evm-lp-positions` | Open positions |
-| `/evm-lp-candidates` | Top pools |
-| `/evm-lp-screen` | Screen + dry deploy |
-| `/evm-lp-manage` | Risk exits / close |
-| `/evm-lp-screener` | Screener persona |
-| `/evm-lp-manager` | Manager persona |
-| `/evm-lp-deploy` | Deploy ops |
-| `/evm-lp-live-mint` | Implement live NPM mint |
-| `/uniswap-docs` | Uniswap V3/V4 official docs |
-| `/pancakeswap-docs` | Pancake V3 / Infinity official docs |
-
-Shared references (under `evm-lp/references/`):
-
-- `official-docs.md` — all official URLs  
-- `univ3-concepts.md` — ticks, fees, NFT lifecycle  
-- `live-mint-checklist.md` — pre-mainnet checklist  
-- `cli-commands.md`, `risk-rules.md`, `safety.md`
-
----
-
-## Roadmap
-
-1. Live `mint` with accurate ticks from pool contract  
-2. PnL from amounts + oracle / pool price  
-3. Multi-chain concurrent positions  
-4. Telegram ops surface (port from Meridian)
+1. **Live On-chain Minting**: Expand tick math calculations to natively support exact pool `slot0` ranges.
+2. **Multi-chain Concurrency**: Run agents synchronously across Base, Arbitrum, and Ethereum.
+3. **Advanced AI Tooling**: Provide the agent with real-time news sentiment and Twitter scrape capabilities for earlier entries.
