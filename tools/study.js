@@ -7,52 +7,71 @@ import { log } from "../logger.js";
  */
 export async function studyTopLPers({ pool_address, limit = 30 }) {
   const geckoNetwork = config.screening.geckoNetwork;
-  if (!geckoNetwork) {
-    return {
-      pool: pool_address,
-      message: `Study mode unavailable: No GeckoTerminal network ID configured for ${config.chain.name}.`,
-      patterns: {},
-      lpers: [],
-    };
-  }
+  let data = [];
+  let useDexScreenerFallback = false;
 
-  // Fetch daily OHLCV for the last 30 days
-  const url = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/pools/${pool_address.toLowerCase()}/ohlcv/day?aggregate=1&limit=${limit}`;
-
-  let data;
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "Accept": "application/json;version=20230302"
+  // Try GeckoTerminal first if network is configured
+  if (geckoNetwork) {
+    const url = `https://api.geckoterminal.com/api/v2/networks/${geckoNetwork}/pools/${pool_address.toLowerCase()}/ohlcv/day?aggregate=1&limit=${limit}`;
+    try {
+      const res = await fetch(url, { headers: { "Accept": "application/json;version=20230302" } });
+      if (res.ok) {
+        const json = await res.json();
+        data = json.data?.attributes?.ohlcv_list || [];
+      } else {
+        useDexScreenerFallback = true;
       }
-    });
-
-    if (!res.ok) {
-      throw new Error(`GeckoTerminal API error ${res.status}`);
+    } catch (e) {
+      useDexScreenerFallback = true;
     }
+  } else {
+    useDexScreenerFallback = true;
+  }
 
-    const json = await res.json();
-    data = json.data?.attributes?.ohlcv_list || [];
-  } catch (error) {
-    log("study_error", `Failed to fetch from GeckoTerminal: ${error.message}`);
+  // If GeckoTerminal failed or returned empty data, try DexScreener
+  if (useDexScreenerFallback || data.length === 0) {
+    const dexNetwork = config.chain.dexscreener || config.chain.id;
+    try {
+      const dexUrl = `https://api.dexscreener.com/latest/dex/pairs/${dexNetwork}/${pool_address}`;
+      const res = await fetch(dexUrl);
+      if (res.ok) {
+        const json = await res.json();
+        const pair = json.pairs && json.pairs[0];
+        if (pair) {
+          log("study", `Fallback to DexScreener for ${pool_address}`);
+          const vol24h = pair.volume?.h24 || 0;
+          const change24h = pair.priceChange?.h24 || 0;
+          const price = parseFloat(pair.priceUsd || "0");
+          const highEst = price * (1 + Math.abs(change24h) / 100);
+          const lowEst = price * (1 - Math.abs(change24h) / 100);
+          
+          return {
+            pool: pool_address,
+            message: "Historical OHLCV unavailable. Fallback to 24h DexScreener snapshot.",
+            patterns: {
+              days_analyzed: 1,
+              avg_daily_volume: Math.round(vol24h),
+              volatility_daily_pct: Math.abs(change24h),
+              overall_trend_pct: change24h,
+              price_range: { high: highEst, low: lowEst }
+            },
+            lpers: []
+          };
+        }
+      }
+    } catch (e) {
+      log("study_error", `DexScreener fallback failed: ${e.message}`);
+    }
+    
     return {
       pool: pool_address,
-      message: `Failed to fetch public historical data: ${error.message}`,
+      message: "No historical OHLCV or DexScreener data found for this pool.",
       patterns: {},
       lpers: [],
     };
   }
 
-  if (!data.length) {
-    return {
-      pool: pool_address,
-      message: "No historical OHLCV data found for this pool on GeckoTerminal.",
-      patterns: {},
-      lpers: [],
-    };
-  }
-
-  // OHLCV format: [timestamp, open, high, low, close, volume]
+  // Process GeckoTerminal OHLCV format: [timestamp, open, high, low, close, volume]
   let totalVolume = 0;
   let maxPrice = 0;
   let minPrice = Infinity;
@@ -80,9 +99,12 @@ export async function studyTopLPers({ pool_address, limit = 30 }) {
   const avgVolume = totalVolume / days.length;
   
   // Calculate historical volatility (standard deviation of daily returns)
-  const meanChange = priceChanges.reduce((a, b) => a + b, 0) / priceChanges.length;
-  const variance = priceChanges.reduce((a, b) => a + Math.pow(b - meanChange, 2), 0) / priceChanges.length;
-  const volatility = Math.sqrt(variance);
+  let volatility = 0;
+  if (priceChanges.length > 0) {
+    const meanChange = priceChanges.reduce((a, b) => a + b, 0) / priceChanges.length;
+    const variance = priceChanges.reduce((a, b) => a + Math.pow(b - meanChange, 2), 0) / priceChanges.length;
+    volatility = Math.sqrt(variance);
+  }
 
   // Overall trend
   const oldestClose = days[days.length - 1].close;
