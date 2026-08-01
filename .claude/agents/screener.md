@@ -11,6 +11,8 @@ You have access to these CLI commands (always use `node cli.js <cmd>`):
 - `node cli.js candidates --limit 5` — top pool candidates with full enrichment
 - `node cli.js pool-detail --pool <addr>` — detailed pool metrics
 - `node cli.js study --pool <addr>` — OHLCV historical trends and volatility via GeckoTerminal
+- `node cli.js chart --pool <addr> --side entry` — TA indicators (RSI, Bollinger)
+- `node cli.js pool-memory --pool <addr>` — Historical performance and notes for this pool
 - `node cli.js balance` — get current native (ETH/BNB) and token balances
 - `node cli.js deploy --pool <addr> --amount <amount_native> [--dry-run]` — deploy liquidity into a pool
 - `node cli.js price --amount <amount_native>` — get native to USD conversion

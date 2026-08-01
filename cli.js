@@ -60,6 +60,9 @@ Commands:
   screen [--dry-run] [--silent] [--chain ...]
   manage [--dry-run] [--silent]
   config [--chain ...]
+  chart --pool <addr> [--side entry|exit]
+  lessons [add <text>] [--limit 50]
+  pool-memory --pool <addr>
   telegram-test             Send a test message (needs TELEGRAM_BOT_TOKEN + CHAT_ID)
   price [--chain ...]       CoinGecko native USD price (ETH/BNB)
   price --amount 0.015      Convert native amount → USD
@@ -106,6 +109,34 @@ Chains: ethereum | base | arbitrum | bsc | robinhood (Uniswap V3 on 4663)
     if (!flags.pool) die("Usage: study --pool <address>");
     const { studyTopLPers } = await import("./tools/study.js");
     out(await studyTopLPers({ pool_address: flags.pool }));
+    break;
+  }
+
+  case "chart": {
+    if (!flags.pool) die("Usage: chart --pool <address>");
+    const { confirmIndicatorPreset } = await import("./tools/chart-indicators.js");
+    // e.g. node cli.js chart --pool 0x... --side entry
+    out(await confirmIndicatorPreset({ pool_address: flags.pool, side: flags.side || "entry" }));
+    break;
+  }
+
+  case "lessons": {
+    const { listLessons, addLesson } = await import("./lessons.js");
+    const sub2 = argv.filter(a => !a.startsWith("-"))[1];
+    if (sub2 === "add") {
+      const text = argv.filter(a => !a.startsWith("-")).slice(2).join(" ");
+      addLesson(text, [], { role: null });
+      out({ saved: true, text });
+    } else {
+      out(listLessons({ limit: Number(flags.limit || 50) }));
+    }
+    break;
+  }
+
+  case "pool-memory": {
+    if (!flags.pool) die("Usage: pool-memory --pool <address>");
+    const { getPoolMemory } = await import("./pool-memory.js");
+    out(getPoolMemory({ pool_address: flags.pool }));
     break;
   }
 

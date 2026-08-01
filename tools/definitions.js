@@ -126,4 +126,47 @@ export const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_chart_indicators",
+      description: "Evaluate technical analysis chart indicators (RSI, Bollinger Bands) for a pool",
+      parameters: {
+        type: "object",
+        properties: {
+          pool_address: { type: "string" },
+          side: { type: "string", enum: ["entry", "exit"] },
+        },
+        required: ["pool_address"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_pool_memory",
+      description: "Retrieve past deployment history and notes for a pool",
+      parameters: {
+        type: "object",
+        properties: {
+          pool_address: { type: "string" },
+        },
+        required: ["pool_address"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_performance_history",
+      description: "Get recent closed position history to evaluate agent performance",
+      parameters: {
+        type: "object",
+        properties: {
+          hours: { type: "number" },
+          limit: { type: "number" },
+        },
+      },
+    },
+  },
 ];

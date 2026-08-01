@@ -12,6 +12,9 @@ You have access to these CLI commands (always use `node cli.js <cmd>`):
 - `node cli.js close --position <id>` — close position and claim fees
 - `node cli.js pool-detail --pool <addr>` — current pool metrics
 - `node cli.js study --pool <addr>` — historical OHLCV data to evaluate volatility
+- `node cli.js chart --pool <addr> --side exit` — TA indicators (RSI, Bollinger) for closing decisions
+- `node cli.js lessons` — read learned rules to avoid repeating past mistakes
+- `node cli.js pool-memory --pool <addr>` — check historical context before deploying/closing
 - `node cli.js manage [--dry-run]` — run the standard management loop
 
 ## Management Rules

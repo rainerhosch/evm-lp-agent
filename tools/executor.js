@@ -5,6 +5,9 @@ import { log, logAction } from "../logger.js";
 import { checkExitRules } from "../risk.js";
 import { notifyDeploy, notifyClose } from "../telegram.js";
 import { getNativeUsdPrice, nativeToUsd, usdToNative } from "./coingecko.js";
+import { confirmIndicatorPreset } from "./chart-indicators.js";
+import { getPoolMemory } from "../pool-memory.js";
+import { getPerformanceHistory } from "../lessons.js";
 
 const PROTECTED = new Set(["deploy_position", "close_position", "claim_fees"]);
 
@@ -17,6 +20,9 @@ const toolMap = {
   deploy_position: async (args) => (await getDexAdapter()).deployPosition(args),
   close_position: async (args) => (await getDexAdapter()).closePosition(args),
   claim_fees: async (args) => (await getDexAdapter()).claimFees(args),
+  get_chart_indicators: confirmIndicatorPreset,
+  get_pool_memory: getPoolMemory,
+  get_performance_history: getPerformanceHistory,
   get_native_price: async () => getNativeUsdPrice(config.chain),
   get_config: async () => ({
     chain: config.chain,
